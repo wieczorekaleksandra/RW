@@ -1,0 +1,530 @@
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[polish]{babel}
+\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{tocloft}
+
+\hypersetup{
+    hidelinks,
+    pdftitle={Scenariusze działań},
+    pdfauthor={Aleksandra Wieczorek, Grzegorz Prasek, Hubert Sobociński, Jakub Kindracki, Mykhailo Shamrai, Stanisław Zaprzalski, Wiktor Kobielski}
+}
+
+
+\usepackage{tikz}
+\usepackage{listings}
+
+\lstdefinestyle{dsl}{
+    basicstyle=\ttfamily\small,
+    numbers=none,
+    frame=none,
+    xleftmargin=0pt,
+    aboveskip=0.25em,
+    belowskip=0.25em,
+    columns=fullflexible,
+    keepspaces=true,
+    showstringspaces=false
+}
+\newcommand{\langkw}[1]{\texttt{#1}}
+\newcommand{\langvar}[1]{\textit{#1}}
+
+\newenvironment{actiondesc}
+{\par\begingroup\small\setlength{\parindent}{0pt}\setlength{\parskip}{0pt}\noindent}
+{\par\endgroup}
+
+
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.6em}
+
+\renewcommand{\contentsname}{}
+\setlength{\cftbeforesecskip}{0.45em}
+\setlength{\cftbeforesubsecskip}{0pt}
+\setlength{\cftbeforesubsubsecskip}{0pt}
+\renewcommand{\cftsecfont}{\bfseries}
+\renewcommand{\cftsecpagefont}{\bfseries}
+\renewcommand{\cfttoctitlefont}{\huge\bfseries}
+\setcounter{tocdepth}{3}
+
+\begin{document}
+
+\begin{titlepage}
+    \thispagestyle{empty}
+    \begin{center}
+        \vspace*{3.2cm}
+
+        {\fontsize{26}{31}\selectfont\bfseries Scenariusze działań\par}
+        \vspace{1.2cm}
+        {\fontsize{18}{22}\selectfont Reprezentacja wiedzy\par}
+
+        \vspace{2.8cm}
+        {\fontsize{16}{20}\selectfont \today \par}
+
+        \vfill
+
+        {\fontsize{15}{10}\selectfont\bfseries Aleksandra Wieczorek\par}
+        \vspace{0.3cm}
+        {\fontsize{12}{10}\selectfont Grzegorz Prasek\par}
+        \vspace{0.3cm}
+        {\fontsize{12}{10}\selectfont Hubert Sobociński\par}
+        \vspace{0.3cm}
+        {\fontsize{12}{10}\selectfont Jakub Kindracki\par}
+        \vspace{0.3cm}
+        {\fontsize{12}{10}\selectfont Mykhailo Shamrai\par}
+        \vspace{0.3cm}
+        {\fontsize{12}{10}\selectfont Stanisław Zaprzalski\par}
+        \vspace{0.3cm}
+        {\fontsize{12}{10}\selectfont Wiktor Kobielski\par}
+
+    \end{center}
+\end{titlepage}
+
+\clearpage
+\pagenumbering{arabic}
+\setcounter{page}{1}
+
+\makeatletter
+{\raggedright
+\section*{Spis treści}
+\@starttoc{toc}
+\par}
+\makeatother
+
+\clearpage
+
+\section{Wstęp}
+
+Celem projektu jest opracowanie i zaimplementowanie języka opisu akcji dla opisanej w~dokumencie specyfikacji klasy systemów dynamicznych oraz odpowiadającego mu języka kwerend zapewniającego uzyskanie odpowiedzi na następujące zapytania:
+
+\begin{enumerate}[label=\arabic*.]
+    \item Czy podany scenariusz jest możliwy do realizacji?
+    \item Czy w~chwili $t$ realizacji scenariusza wykonywana jest akcja $A$?
+    \item Czy w~chwili $t \geq 0$ realizacji danego scenariusza warunek $\gamma$ zachodzi zawsze/kiedykolwiek?
+\end{enumerate}
+
+\subsection{Klasa systemów dynamicznych}
+
+
+Niech $DS1$ będzie klasą systemów dynamicznych, dla której opracowano język opisu akcji. Dla tej klasy przyjęto poniższe założenia.
+
+
+
+\subsubsection*{Z1: Prawo inercji}
+
+Wartości zmiennych opisujących stan systemu (fluentów) pozostają niezmienne tak długo, jak długo nie zostaną zmodyfikowane przez wykonanie akcji lub inny jawnie określony mechanizm zmiany stanu. Oznacza to, że brak informacji o zmianie wartości danego fluentu jest interpretowany jako utrzymanie jego dotychczasowej wartości w kolejnych chwilach czasowych.
+
+\subsubsection*{Z2: Sekwencyjność i~niedeterminizm działań}
+
+Dopuszczalny jest wyłącznie sekwencyjny przebieg działań, co oznacza, że w~jednej chwili czasowej może być wykonywana co najwyżej jedna akcja. Jednocześnie ewolucja systemu może mieć charakter niedeterministyczny. Oznacza to, że nawet dla tego samego stanu początkowego oraz tego samego opisu dziedziny mogą istnieć różne dopuszczalne dalsze przebiegi działania systemu. W~rezultacie wykonanie tej samej akcji nie musi zawsze prowadzić do jednego, jednoznacznie określonego ciągu przyszłych stanów.
+
+\subsubsection*{Z3: Pełna informacja o~akcjach i~ich skutkach bezpośrednich}
+
+W~klasie systemów dynamicznych $DS1$ zakłada się, że opis dziedziny zawiera pełną informację o~wszystkich akcjach, które mogą wystąpić w~systemie, oraz o~wszystkich ich skutkach bezpośrednich. Dla każdej akcji znane jest zatem, jakie zmiany stanu może ona wywołać bezpośrednio po swoim wykonaniu lub w~trakcie swojej realizacji. Nie dopuszcza się istnienia nieopisanych skutków bezpośrednich akcji — każda taka zmiana musi wynikać jawnie z~definicji danej akcji.
+
+\subsubsection*{Z4: Liniowy model czasu (czas dyskretny)}
+
+Czas ma charakter dyskretny i~jest uporządkowany liniowo. Oznacza to, że przebieg systemu rozpatrywany jest jako ciąg kolejnych chwil czasowych należących do zbioru liczb naturalnych, a~każdy stan systemu oraz każde zdarzenie odnoszone są do określonego punktu tego ciągu. Model ten wyklucza rozgałęzienia czasu na poziomie samej struktury — następstwo chwil jest jednoznaczne, a~zmiany zachodzą krok po kroku.
+
+
+%\subsubsection*{Z3: Pełna informacja o~wszystkich akcjach i~wszystkich ich skutkach bezpośrednich}
+
+%Dla każdej akcji możliwej do wykonania w~systemie znane są jej skutki bezpośrednie. Opis dziedziny zawiera pełną informację o~tym, jakie zmiany może powodować dana akcja.
+
+%\subsubsection*{Z4: Liniowy model czasu (czas dyskretny)}
+
+%Czas w~systemie ma charakter dyskretny i~jest uporządkowany liniowo. Zdarzenia oraz zmiany stanu rozpatrywane są w~kolejnych punktach czasowych należących do zbioru liczb naturalnych.
+
+\subsubsection*{Z5: Charakterystyka akcji}
+
+Z każdą akcją związany jest:
+
+\begin{enumerate}[label=\arabic*.]
+    \item \textbf{Warunek początkowy} \\
+    Z każdą akcją związany jest warunek początkowy, który może być formułą logiczną lub wartością \texttt{true}. Warunek ten musi być spełniony w chwili rozpoczęcia akcji --- jeśli nie jest, akcja nie może zostać podjęta lub jej efekt jest pusty.
+
+    \item \textbf{Efekt akcji} \\
+    Akcja może posiadać efekt cząstkowy lub końcowy. Dopuszczalny jest opis przebiegu akcji, tzn. sytuacja, w której efekty pojawiają się w~różnych momentach jej realizacji. Efekty cząstkowe zachodzą w trakcie trwania akcji, natomiast efekt końcowy następuje po jej zakończeniu. Możliwe jest również modelowanie sytuacji, w której ta sama akcja wywołuje wiele różnych zmian stanu systemu w~różnych punktach czasowych swojego trwania.
+
+    \item \textbf{Czas trwania akcji} \\
+    Z każdą akcją związany jest czas jej trwania $d \geq 1$ oraz chwile, w~których mogą występować poszczególne efekty. W trakcie wykonywania jednej akcji może pojawić się kilka efektów osiąganych w~różnych punktach czasowych. Czas trwania akcji jest parametrem dyskretnym i~należy do zbioru liczb naturalnych.
+\end{enumerate}
+
+\subsubsection*{Z6: Nieznajomość wartości zmiennych podczas realizacji akcji}
+
+Wartości wszystkich zmiennych, na które dana akcja ma lub może mieć wpływ w pewnym przedziale czasowym jej realizacji, mogą być nieznane. Oznacza to zawieszenie prawa inercji dla tych fluentów w~czasie trwania akcji --- nie można zakładać, że ich wartości pozostają niezmienione.
+
+\subsubsection*{Z7: Skutki środowiskowe i dynamiczne}
+
+Każda akcja może wywoływać dwa zasadnicze rodzaje skutków. Po pierwsze, mogą to być skutki środowiskowe, które polegają na bezpośredniej zmianie wartości fluentów opisujących stan systemu. 
+
+Po drugie, realizacja akcji może pociągać za sobą skutki dynamiczne. Oznaczają one, że zakończenie wykonywania jednej akcji (nazywanej akcją przyczynową) może automatycznie zainicjować wystąpienie innych akcji w systemie. Takie wywołanie następuje po upływie określonego czasu $t \ge 0$ jednostek od momentu zakończenia akcji przyczynowej. Zjawisko to znacząco wpływa na złożoność ewolucji systemu, ponieważ jedna podjęta akcja może lawinowo generować kolejne zdarzenia w przyszłości.
+
+\subsubsection*{Z8: Niewykonalność akcji}
+
+Wykonalność poszczególnych akcji w systemie nie jest stała i jest ściśle uzależniona od bieżących warunków. W pewnych określonych stanach podjęcie danej akcji staje się całkowicie niewykonalne. 
+
+Ograniczenia te w klasie $DS1$ mogą być zdefiniowane na dwa sposoby:
+\begin{enumerate}[label=\arabic*.]
+    \item \textbf{Poprzez określenie warunków logicznych} -- akcja jest blokowana, jeśli w danym momencie system znajduje się w stanie spełniającym określoną formułę logiczną.
+    \item \textbf{Poprzez podanie konkretnych punktów czasowych} -- realizacja akcji jest odgórnie zabroniona w ściśle zdefiniowanych momentach trwania scenariusza.
+\end{enumerate}
+Aby móc przeprowadzić taką zablokowaną akcję, należy poczekać na zmianę stanu systemu lub na opuszczenie zabronionego punktu czasowego.
+
+\subsubsection*{Z9: Automatyczne wywoływanie akcji}
+%\subsubsection*{Pewne stany mogą automatycznie wywoływać pewne akcje}
+ 
+W~klasie systemów dynamicznych $DS1$ dopuszcza się sytuację, w~której osiągnięcie przez system określonego stanu powoduje automatyczne zainicjowanie wykonania pewnej akcji, bez zewnętrznej ingerencji. Mechanizm ten odpowiada pojęciu \textbf{wyzwalacza stanowego} (ang.~\emph{state trigger}).
+ 
+Formalnie, jeżeli w~pewnej chwili $t$ stan systemu spełnia zadaną formułę logiczną $\alpha$, to w~tej samej chwili $t$ automatycznie rozpoczyna się wykonanie wskazanej akcji $a$. W~języku opisu akcji relacja ta wyrażana jest instrukcją:
+\[
+\alpha \text{ \textbf{causes} } a
+\]
+ 
+Wyzwalacze stanowe działają reaktywnie – system w każdej chwili czasowej sprawdza, czy bieżący stan spełnia warunek $\alpha$, i jeżeli tak, wymusza rozpoczęcie akcji $a$. Mechanizm ten podlega jednak ograniczeniom wynikającym z~pozostałych założeń klasy $DS1$:
+\begin{itemize}
+    \item Zgodnie z założeniem o~sekwencyjności działań (Z2), jeśli w danej chwili trwa już wykonywanie innej akcji, wyzwolona akcja nie może się rozpocząć — musi poczekać na zwolnienie systemu lub zostaje zablokowana.
+    \item Zgodnie z założeniem o~niewykonalności akcji (Z8), nawet jeśli warunek wyzwalacza jest spełniony, akcja $a$ nie zostanie wywołana, jeżeli w danym stanie lub punkcie czasowym obowiązuje instrukcja \textbf{impossible} blokująca tę akcję.
+\end{itemize}
+ 
+Wyzwalacze stanowe umożliwiają modelowanie zachowań autonomicznych systemu, w których zmiany stanu samoczynnie generują dalsze zdarzenia. Przykładowo, osiągnięcie przez pewien parametr wartości krytycznej może automatycznie uruchomić procedurę awaryjną bez konieczności jawnego zaplanowania tej akcji w scenariuszu.
+
+\subsection{Scenariusze działań}
+ 
+Pojęcie scenariusza działań rozumiemy w sensie języka $AL$. Scenariusz stanowi formalny opis przebiegu obserwacji oraz wystąpień akcji w~czasie i~jest definiowany jako para:
+\[
+Sc = (OBS, ACS),
+\]
+gdzie:
+\begin{itemize}
+    \item $OBS$ jest zbiorem \textbf{obserwacji}, czyli stwierdzeń postaci $(\alpha, t)$ oznaczających, że formuła logiczna $\alpha$ jest prawdziwa w~chwili $t$. Obserwacje opisują znane fakty o~stanie systemu w~określonych punktach czasowych.
+    \item $ACS$ jest zbiorem \textbf{deklaracji akcji}, czyli stwierdzeń postaci $(a, t)$ oznaczających, że akcja $a$ ma zostać rozpoczęta w~chwili $t$. Zbiór ten zawiera wyłącznie akcje zaplanowane bezpośrednio --- akcje wynikające z~mechanizmów pośrednich (skutki dynamiczne opisane w~Z7 oraz wyzwalacze stanowe opisane w~Z9) nie są częścią deklaracji, lecz są automatycznie dodawane do relacji wykonań $E$ w~procesie budowy modelu.
+\end{itemize}
+ 
+
+\section{Język opisu akcji}
+
+\subsection{Syntaktyka}
+
+Przygotowany język akcji będzie modyfikacją języka $AL$ dostosowaną do warunków opisanych dla klasy $DS1$. Załóżmy, że sygnaturą jest para
+\[
+\Upsilon = (F, AC),
+\]
+gdzie $F = \{f_1, f_2, \dots, f_n\}$ jest zbiorem fluentów (zmiennych opisujących stan), a $AC = \{a_1, a_2, \dots, a_m\}$ jest zbiorem akcji. 
+
+Literale fluentu definiujemy jako:
+\[
+l ::= f \mid \neg f, \text{ gdzie } f \in F.
+\]
+Formułą $\alpha, \beta, \gamma$ nazywamy kombinację fluentów połączonych spójnikami logicznymi:
+\[
+\alpha ::= f \mid \neg \alpha \mid \alpha \land \beta \mid \alpha \lor \beta \mid \alpha \Rightarrow \beta \mid \alpha \Leftrightarrow \beta.
+\]
+Wprowadzamy również pojęcie \textbf{momentu czasowego} $t \in \mathbb{N}$ oraz \textbf{interwału czasowego} $[t_1, t_2]$.
+
+\subsection{Opis dziedziny}
+
+Opis dziedziny $D$ składa się ze zbioru wyrażeń (instrukcji), które definiują zachowanie systemu. Poniżej przedstawiamy dopuszczalne typy wyrażeń, odpowiadające założeniom klasy $DS1$:
+
+\begin{enumerate}[label=\alph*)]
+    \item \textbf{Wyrażenia skutku (zgodnie z Z5 i Z7 (skutki środowiskowe)):}
+    \[ a \text{ \textbf{causes} } \alpha \text{ \textbf{after} } \delta \text{ \textbf{if} } \pi \]
+    Gdzie $\delta \in \{1, \dots, d\}$ oznacza moment wystąpienia efektu względem startu akcji. 
+    Dla jednej akcji $a$ w opisie dziedziny może istnieć wiele takich wyrażeń z różnymi wartościami $\delta$ oraz różnymi efektami $\alpha$, co pozwala na modelowanie efektów cząstkowych i przebiegu akcji w czasie.
+    
+    \item \textbf{Czas trwania i nieznajomość wartości (Z5, Z6):}
+    \[ a \text{ \textbf{duration} } d \]
+    \[ a \text{ \textbf{releases} } f \text{ \textbf{during} } [t_a, t_b] \]
+    Wyrażenie \textbf{releases} oznacza, że w~przedziale czasowym $[t_a, t_b]$ od rozpoczęcia akcji, wartość fluentu $f$ jest nieznana (zawieszenie prawa inercji dla tego fluentu).
+
+    \item \textbf{Skutki dynamiczne (Z7):}
+    \[ a \text{ \textbf{triggers} } a' \text{ \textbf{after} } \delta \]
+    Po zakończeniu akcji $a$, po upływie $\delta \geq 0$ jednostek czasu, automatycznie rozpoczyna się akcja $a'$.
+
+    \item \textbf{Wyzwalacze stanowe (Z9):}
+    \[ \alpha \text{ \textbf{causes} } a \]
+    Jeśli w systemie zajdzie stan opisany formułą $\alpha$, następuje automatyczne wywołanie akcji $a$.
+
+    \item \textbf{Niewykonalność akcji (Z8):}
+    \[ \text{\textbf{impossible} } a \text{ \textbf{if} } \alpha \]
+    \[ \text{\textbf{impossible} } a \text{ \textbf{at} } t \]
+    Określają warunki logiczne lub konkretne punkty czasowe, w których dana akcja nie może zostać podjęta.
+\end{enumerate}
+
+\subsection{Semantyka}
+
+Semantyczna struktura języka to system $S=(H,O,E)$, dla którego semantyka określa następujące właściwości:
+
+\begin{itemize}
+    \item \textbf{Sposób interpretacji wartości fluentów w~kolejnych chwilach czasu} \\
+    Realizowane jest to poprzez funkcję historii $H : F \times \mathbb{N} \to \{0,1\}$ oraz jej rozszerzenie $H^*$ oceniające dowolne formuły logiczne w~chwili $t$.
+    
+    \item \textbf{Sposób interpretacji rozpoczęcia, trwania i~zakończenia akcji} \\
+    Oparte jest to na relacji wykonań $E \subseteq AC \times \mathbb{N} \times \mathbb{N}$. Jeśli $(a, t_1, t_2) \in E$, to akcja $a$ rozpoczyna się w~czasie $t_1$ i~kończy w~czasie $t_2$. Zgodnie z~wyrażeniem opisującym czas trwania ($a$ \textbf{duration} $d$), zachodzi równość $t_2 = t_1 + d$. Dodatkowo, zgodnie z~założeniem o~sekwencyjności działań (Z2), w~danym czasie $t$ może się wykonywać wyłącznie jedna akcja, co oznacza, że interwały czasowe $[t_1, t_2]$ dla różnych wystąpień akcji w~zbiorze $E$ nie mogą się na siebie nakładać:
+    \[
+    ((a_1,t_1,t_1') \in E \land (a_2,t_2,t_2') \in E \land (t_1,t_1') \cap (t_2,t_2') \neq \varnothing) \Rightarrow a_1 = a_2
+    \]
+
+    \item \textbf{Sposób modelowania efektów częściowych i~końcowych} \\
+    Jeśli w~opisie dziedziny znajduje się instrukcja skutku ($a$ \textbf{causes} $\alpha$ \textbf{after} $\delta$ \textbf{if} $\pi$), a~w~historii systemu dla chwili rozpoczęcia akcji $t_1$ spełniony był warunek początkowy ($H^*(\pi, t_1) = 1$) i~akcja została wykonana ($(a, t_1, t_1+d) \in E$), to w~wyniku jej działania formuła $\alpha$ staje się prawdziwa w~historii dokładnie w~chwili $t_1+\delta$, co zapisujemy jako $H^*(\alpha, t_1+\delta) = 1$. Dzięki temu pojedyncza akcja może modyfikować system w~wielu punktach swojego trwania.
+
+    \item \textbf{Sposób modelowania nieznajomości wartości zmiennych} \\
+    Realizowane jest to za pomocą funkcji okluzji $O : AC \times \mathbb{N} \to 2^F$. Zgodnie z~instrukcją ($a$ \textbf{releases} $f$ \textbf{during} $[t_a, t_b]$), jeśli akcja $a$ rozpoczyna się w~chwili $t_1$, to fluent $f$ zostaje ukryty w~przedziale czasu od $t_1+t_a$ do $t_1+t_b$. Oznacza to, że $f \in O(a, \tau)$ dla $\tau \in [t_1+t_a, t_1+t_b]$. W~tym przedziale czasowym wartość fluentu jest nieznana (prawo inercji zostaje dla niego zawieszone).
+
+    \item \textbf{Sposób reprezentacji skutków dynamicznych} \\
+    Skutki dynamiczne automatycznie rozszerzają zbiór wykonań $E$. Jeśli w~dziedzinie określono ($a$ \textbf{triggers} $a'$ \textbf{after} $\delta$) i~akcja $a$ została wykonana w~interwale $[t_1, t_1+d]$, to do relacji $E$ musi zostać dodane wystąpienie akcji wywołanej $a'$ rozpoczynające się w~chwili $t_1+d+\delta$. Podobnie działają wyzwalacze stanowe ($\alpha$ \textbf{causes} $a$) -- wymuszają one dodanie akcji $a$ do zbioru $E$ w~chwili $t$, w~której zachodzi stan $H^*(\alpha, t) = 1$. Zjawisko to jest jednak ograniczane przez wyrażenia niewykonalności (\textbf{impossible} $a$ \textbf{if} $\alpha$ oraz \textbf{impossible} $a$ \textbf{at} $t$), które blokują dodanie akcji do relacji $E$ w~niepożądanych stanach lub punktach czasowych.
+
+    \item \textbf{Sposób określania wykonalności scenariusza} \\
+    Scenariusz $Sc = (OBS, ACS)$ jest realizowalny (wykonalny), jeżeli posiada model. Modelem nazywamy O-minimalną strukturę $S=(H,O,E)$ zgodną z~dziedziną $D$, zachowującą prawo inercji, w~której spełnione są wszystkie obserwacje z~zestawu $OBS$, zadeklarowane wystąpienia akcji z~zestawu $ACS$ należą do relacji $E$, a~żadna z~wykonywanych akcji nie łamie reguł zdefiniowanych instrukcjami \textbf{impossible}.
+\end{itemize}
+
+Funkcja $H^{*}$, będąca rozszerzeniem $H$ na dowolną formułę, zdefiniowana jest standardowo za pomocą działań arytmetycznych odpowiadających logice binarnej:
+\begin{align*}
+H^{*}(f,t) &= H(f,t) && \text{dla każdego } f \in F, \\
+H^{*}(\neg \alpha,t) &= 1 - H^{*}(\alpha,t), \\
+H^{*}(\alpha \land \beta,t) &= \min(H^{*}(\alpha,t), H^{*}(\beta,t)), \\
+H^{*}(\alpha \lor \beta,t) &= \max(H^{*}(\alpha,t), H^{*}(\beta,t)), \\
+H^{*}(\alpha \Rightarrow \beta,t) &= \max(1 - H^{*}(\alpha,t), H^{*}(\beta,t)), \\
+H^{*}(\alpha \Leftrightarrow \beta,t) &= 1 - |H^{*}(\alpha,t) - H^{*}(\beta,t)|.
+\end{align*}
+
+\subsection{Realizacja scenariusza działań}
+
+Scenariusz $Sc$ jest \textbf{realizowalny} (wykonalny) względem opisu dziedziny $D$, jeżeli istnieje co najmniej jeden model $S = (H, O, E)$ spełniający łącznie następujące warunki:
+\begin{enumerate}[label=\arabic*.]
+    \item \textbf{Zgodność z~obserwacjami:} dla każdej obserwacji $(\alpha, t) \in OBS$ zachodzi $H^{*}(\alpha, t) = 1$.
+    \item \textbf{Zgodność z~deklaracjami akcji:} dla każdej deklaracji $(a, t) \in ACS$ istnieje w~relacji wykonań odpowiednie wystąpienie $(a, t, t+d) \in E$, gdzie $d$ jest czasem trwania akcji $a$.
+    \item \textbf{Zgodność z~opisem dziedziny:} wszystkie wyrażenia skutku, wyrażenia \textbf{releases}, skutki dynamiczne (\textbf{triggers}) oraz wyzwalacze stanowe są poprawnie odzwierciedlone w~historii $H$ i~relacji wykonań $E$.
+    \item \textbf{Zachowanie prawa inercji:} wartość każdego fluentu $f$ pozostaje niezmieniona między kolejnymi chwilami czasu, chyba że zmiana ta wynika z~efektu wykonywanej akcji lub fluent znajduje się w~stanie okluzji (jest objęty wyrażeniem \textbf{releases}).
+    \item \textbf{Spełnienie warunków wykonalności:} żadna z~akcji obecnych w~relacji $E$ nie narusza reguł niewykonalności zdefiniowanych instrukcjami \textbf{impossible}.
+    \item \textbf{Zachowanie sekwencyjności:} interwały czasowe wykonywanych akcji w~relacji $E$ nie nakładają się na siebie.
+    \item \textbf{$O$-minimalność:} model minimalizuje zbiór okluzji, co oznacza, że wartości fluentów są nieznane jedynie wtedy, gdy wynika to bezpośrednio z~wyrażeń \textbf{releases} obecnych w~opisie dziedziny.
+\end{enumerate}
+ 
+Jeżeli taki model nie istnieje, scenariusz uznajemy za nierealizowalny. Nierealizowalność może wynikać między innymi z~konfliktu czasowego między akcjami (naruszenie sekwencyjności), z~niespełnienia warunku początkowego pewnej akcji, z~naruszenia reguły \textbf{impossible} lub z~niezgodności obserwacji z~efektami wynikającymi z~opisu dziedziny.
+
+
+\section{Język kwerend}
+
+\subsection{Zakres języka kwerend}
+
+Projektowany język kwerend powinien umożliwiać formułowanie zapytań odpowiadających pytaniom postawionym w~treści zadania dla klasy $DS1$, to znaczy dotyczących:
+\begin{enumerate}[label=\arabic*.]
+    \item realizowalności scenariusza,
+    \item wykonywania akcji $a$ w~chwili $t$,
+    \item spełniania warunku $\gamma$ w~chwili $t \ge 0$ w~interpretacji zawsze lub kiedykolwiek.
+\end{enumerate}
+
+Dla tak zdefiniowanego zakresu, syntaktyka zaprezentowanych kwerend opiera się na następujących zapytaniach:
+\begin{itemize}
+    \item \textbf{\texttt{possibly Sc}} \\
+    Weryfikuje punkt 1 (istnienie modelu dla scenariusza).
+    \item \textbf{\texttt{necessary/possibly performing a at t when Sc}} \\
+    Weryfikuje punkt 2. Pozwala sprawdzić, czy w~trakcie realizacji scenariusza w~punkcie czasowym $t$ trwa wykonywanie akcji $a$.
+    \item \textbf{\texttt{necessary/possibly $\gamma$ at t when Sc}} \\
+    Weryfikuje punkt 3. Odnosi się bezpośrednio do oceny dowolnej formuły logicznej w~historii systemu.
+\end{itemize}
+
+\subsection{Interpretacja odpowiedzi (Semantyka kwerend)}
+
+Przez \emph{zawsze} rozumiemy, że dany warunek zachodzi w~każdym modelu scenariusza zgodnym z~opisem dziedziny, natomiast przez \emph{kiedykolwiek} rozumiemy, że zachodzi on w~co najmniej jednym takim modelu. Niech $Sc$ będzie scenariuszem, a~$D$ opisem dziedziny. Powiemy, że kwerenda $Q$ jest konsekwencją $Sc$ zgodnie z~$D$, jeśli spełnione są poniższe warunki:
+
+\begin{itemize}
+    \item \textbf{Q postaci \texttt{possibly Sc}} \\
+    Zapytanie to zwróci \texttt{True}, jeśli istnieje przynajmniej jeden model $S=(H,O,E)$ scenariusza $Sc$ względem podanego opisu dziedziny $D$.
+
+    \item \textbf{Q postaci \texttt{necessary/possibly performing a at t when Sc}} \\
+    Zapytanie z~operatorem \textbf{\texttt{necessary}} zwróci \texttt{True}, jeśli dla \textbf{każdego} modelu $S=(H,O,E)$ scenariusza $Sc$ zgodnego z~$D$ istnieje w~relacji wykonań takie wystąpienie akcji $(a, t_1, t_2) \in E$, że analizowana chwila $t$ zawiera się w~interwale jej trwania, czyli $t \in [t_1, t_2]$. 
+    W~przypadku operatora \textbf{\texttt{possibly}}, powyższy warunek musi być spełniony dla \textbf{przynajmniej jednego} modelu.
+
+    \item \textbf{Q postaci \texttt{necessary/possibly $\gamma$ at t when Sc}} \\
+    Dla wariantu \textbf{\texttt{necessary}}, program zwróci \texttt{True}, jeśli dla \textbf{absolutnie każdego} modelu scenariusza $Sc$ zachodzi $H^{*}(\gamma,t)=1$. 
+    Dla wariantu \textbf{\texttt{possibly}}, zapytanie zwróci \texttt{True}, jeśli warunek $H^{*}(\gamma,t)=1$ zostanie spełniony dla \textbf{przynajmniej jednego} (pewnego) modelu.
+\end{itemize}
+
+Jeśli dany warunek semantyczny nie jest spełniony, kwerenda zwraca odpowiedź \texttt{False}.
+
+
+\section{Przykłady}
+
+\subsection{Przykład 1}
+
+\subsubsection*{Historia}
+
+Ania chce uruchomić stary projektor przed prezentacją. Projektor po naciśnięciu przycisku zasilania nie zawsze włącza się poprawnie. Jeśli projektor jest wyłączony, Ania naciska przycisk \emph{power}. Po tej czynności projektor może się uruchomić, ale może też pozostać wyłączony.
+
+\subsubsection*{Opis akcji}
+
+\begin{actiondesc}
+\langvar{press\_power} \langkw{duration} 1\\
+\langvar{press\_power} \langkw{releases} \langvar{projector\_on} \langkw{during} [0,1]\\
+\langkw{impossible} \langvar{press\_power} \langkw{if} \langvar{projector\_on}
+\end{actiondesc}
+
+\subsubsection*{Scenariusz}
+
+\noindent
+$Sc = (OBS, ACS)$\\
+$OBS = \{(\neg \texttt{projector\_on}, 0)\}$\\
+$ACS = \{(\texttt{press\_power}, 0)\}$
+
+\subsubsection*{Kwerendy}
+
+\begin{enumerate}[label=\arabic*.]
+    \item \langkw{possibly} $Sc$;
+    \item \langkw{necessary} \langkw{performing} \langvar{press\_power} \langkw{at} 1 \langkw{when} $Sc$;
+    \item \langkw{necessary} \langvar{projector\_on} \langkw{at} 2 \langkw{when} $Sc$;
+    \item \langkw{possibly} \langvar{projector\_on} \langkw{at} 2 \langkw{when} $Sc$;
+\end{enumerate}
+
+\subsubsection*{Obliczenia}
+
+Akcja \langvar{press\_power} zostaje podjęta w~chwili $t=0$ (zgodnie z~$ACS$) i~trwa do chwili $t=1$ ($d=1$, zatem $(press\_power, 0, 1) \in E$). Wyrażenie \langkw{releases} powoduje okluzję fluentu \langvar{projector\_on} w~przedziale $[0,1]$. Ponieważ brak jest wyrażenia \langkw{causes} dla tej akcji, wartość fluentu po zakończeniu okluzji jest niedeterministyczna. Istnieją zatem dwie dopuszczalne struktury:
+
+\begin{enumerate}[label=\arabic*.]
+    \item Struktura $S_1$ --- projektor \textbf{nie} uruchomił się:
+
+    \begin{center}
+    \begin{tikzpicture}[x=1.8cm]
+        \draw[red, very thick] (0,0.6) -- (1,0.6);
+        \node[red, above] at (0.5,0.6) {\small\textit{press\_power}};
+        \draw[->] (-0.3,0) -- (3.6,0) node[right] {\small time};
+        \foreach \x in {0,1,2,3} {
+            \draw (\x,0.08) -- (\x,-0.08) node[below] {\small\x};
+        }
+        \node[below=0.55cm] at (0,0) {\small$\neg$\textit{proj.}};
+        \node[below=0.55cm] at (1,0) {\small$\neg$\textit{proj.}$^{*}$};
+        \node[below=0.55cm] at (2,0) {\small$\neg$\textit{proj.}};
+        \node[below=0.55cm] at (3,0) {\small$\neg$\textit{proj.}};
+    \end{tikzpicture}
+    \end{center}
+
+    \item Struktura $S_2$ --- projektor uruchomił się:
+
+    \begin{center}
+    \begin{tikzpicture}[x=1.8cm]
+        \draw[red, very thick] (0,0.6) -- (1,0.6);
+        \node[red, above] at (0.5,0.6) {\small\textit{press\_power}};
+        \draw[->] (-0.3,0) -- (3.6,0) node[right] {\small time};
+        \foreach \x in {0,1,2,3} {
+            \draw (\x,0.08) -- (\x,-0.08) node[below] {\small\x};
+        }
+        \node[below=0.55cm] at (0,0) {\small$\neg$\textit{proj.}};
+        \node[below=0.55cm] at (1,0) {\small\textit{proj.}$^{*}$};
+        \node[below=0.55cm] at (2,0) {\small\textit{proj.}};
+        \node[below=0.55cm] at (3,0) {\small\textit{proj.}};
+    \end{tikzpicture}
+    \end{center}
+\end{enumerate}
+
+\noindent Skrót \textit{proj.} oznacza fluent \langvar{projector\_on}, a~$^{*}$ wskazuje na okluzję.
+W~obu strukturach $(press\_power, 0, 1) \in E$, zatem $t=1 \in [0,1]$.
+
+\subsubsection*{Odpowiedź}
+\begin{enumerate}[label=\arabic*.]
+    \item \textit{True} --- scenariusz jest realizowalny (istnieją dwa modele: $S_1$ i~$S_2$).
+    \item \textit{True} --- w~każdym modelu $(press\_power, 0, 1) \in E$, zatem $t=1 \in [0,1]$.
+    \item \textit{False} --- w~strukturze $S_1$ zachodzi $\neg$\langvar{projector\_on} w~chwili $t=2$.
+    \item \textit{True} --- w~strukturze $S_2$ zachodzi \langvar{projector\_on} w~chwili $t=2$.
+\end{enumerate}
+
+\subsubsection*{Komentarz}
+
+Przykład ten pokazuje sytuację, w której po wykonaniu akcji wartość fluentu \texttt{projector\_on} staje się nieznana na pewnym przedziale czasu. Dzięki temu można modelować niedeterministyczne uruchamianie urządzenia.
+
+\subsection{Przykład 2}
+
+\subsubsection*{Historia}
+
+W serwerowni znajduje się czujnik dymu. Jeżeli w pomieszczeniu pojawi się dym, system automatycznie uruchamia alarm. Po uruchomieniu alarmu, po pewnym czasie automatycznie włącza się wentylacja. W czasie uruchamiania wentylacji nie wiadomo jeszcze, czy działa ona już poprawnie. Alarm nie może zostać uruchomiony, gdy system znajduje się w trybie konserwacji.
+
+\subsubsection*{Opis akcji}
+
+\begin{actiondesc}
+\langvar{activate\_alarm} \langkw{duration} 1\\
+\langvar{activate\_alarm} \langkw{causes} \langvar{alarm\_on} \langkw{after} 1 \langkw{if} \langvar{smoke}\\
+\langvar{smoke} \langkw{causes} \langvar{activate\_alarm}\\
+\langkw{impossible} \langvar{activate\_alarm} \langkw{if} \langvar{maintenance}\\
+\langvar{activate\_alarm} \langkw{triggers} \langvar{start\_ventilation} \langkw{after} 1\\
+\langvar{start\_ventilation} \langkw{duration} 2\\
+\langvar{start\_ventilation} \langkw{releases} \langvar{ventilation\_on} \langkw{during} [0,2]\\
+\langvar{start\_ventilation} \langkw{causes} \langvar{ventilation\_on} \langkw{after} 2 \langkw{if} \langvar{alarm\_on}
+\end{actiondesc}
+
+\subsubsection*{Scenariusz}
+
+\noindent
+$Sc = (OBS, ACS)$\\
+$OBS = \{(\texttt{smoke} \land \neg \texttt{maintenance} \land \neg \texttt{alarm\_on} \land \neg \texttt{ventilation\_on},\ 0)\}$\\
+$ACS = \emptyset$
+
+\subsubsection*{Kwerendy}
+
+\begin{enumerate}[label=\arabic*.]
+    \item \langkw{possibly} $Sc$;
+    \item \langkw{necessary} \langkw{performing} \langvar{activate\_alarm} \langkw{at} 0 \langkw{when} $Sc$;
+    \item \langkw{necessary} \langvar{alarm\_on} \langkw{at} 1 \langkw{when} $Sc$;
+    \item \langkw{necessary} \langkw{performing} \langvar{start\_ventilation} \langkw{at} 2 \langkw{when} $Sc$;
+    \item \langkw{necessary} \langvar{ventilation\_on} \langkw{at} 4 \langkw{when} $Sc$;
+\end{enumerate}
+
+\subsubsection*{Obliczenia}
+
+W~chwili $t=0$ spełniony jest warunek wyzwalacza stanowego \langvar{smoke} \langkw{causes} \langvar{activate\_alarm}, dlatego akcja \langvar{activate\_alarm} zostaje automatycznie zainicjowana. Kolejne zdarzenia wyznaczane są następująco:
+
+\begin{enumerate}[label=\arabic*.]
+    \item $(activate\_alarm, 0, 1) \in E$ (duration $d=1$, start $t=0$, koniec $t=1$).
+    \item \langvar{activate\_alarm} \langkw{causes} \langvar{alarm\_on} \langkw{after} $1$ \langkw{if} \langvar{smoke}: ponieważ $H^*(\textit{smoke},\,0)=1$, więc $H^*(\textit{alarm\_on},\,1)=1$.
+    \item Skutek dynamiczny \langvar{activate\_alarm} \langkw{triggers} \langvar{start\_ventilation} \langkw{after} $1$: akcja \langvar{start\_ventilation} startuje w~chwili $t = 1 + 1 = 2$.
+    \item $(start\_ventilation, 2, 4) \in E$ (duration $d=2$, start $t=2$, koniec $t=4$).
+    \item \langvar{start\_ventilation} \langkw{releases} \langvar{ventilation\_on} \langkw{during} $[0,2]$: okluzja \langvar{ventilation\_on} w~przedziale $[2,\,4]$.
+    \item \langvar{start\_ventilation} \langkw{causes} \langvar{ventilation\_on} \langkw{after} $2$ \langkw{if} \langvar{alarm\_on}: ponieważ $H^*(\textit{alarm\_on},\,2)=1$ (prawo inercji od $t=1$), więc $H^*(\textit{ventilation\_on},\,4)=1$.
+\end{enumerate}
+
+Przebieg scenariusza jest wyznaczony jednoznacznie --- istnieje dokładnie jedna struktura $S_1$:
+
+\begin{center}
+\begin{tikzpicture}[x=1.55cm]
+    \draw[red, very thick] (0,1.5) -- (1,1.5);
+    \node[red, above] at (0.5,1.5) {\small\textit{activate\_alarm}};
+    \draw[red, very thick] (2,1.5) -- (4,1.5);
+    \node[red, above] at (3.0,1.5) {\small\textit{start\_ventilation}};
+    \draw[->] (-0.3,0) -- (5.8,0) node[right] {\small time};
+    \foreach \x in {0,1,2,3,4,5} {
+        \draw (\x,0.08) -- (\x,-0.08) node[below] {\small\x};
+    }
+    \node[below=0.50cm] at (0,0) {\small$\neg$\textit{alarm}};
+    \node[below=0.50cm] at (1,0) {\small\textit{alarm}};
+    \node[below=0.50cm] at (2,0) {\small\textit{alarm}};
+    \node[below=0.50cm] at (3,0) {\small\textit{alarm}};
+    \node[below=0.50cm] at (4,0) {\small\textit{alarm}};
+    \node[below=0.50cm] at (5,0) {\small\textit{alarm}};
+    \node[below=1.10cm] at (0,0) {\small$\neg$\textit{vent.}};
+    \node[below=1.10cm] at (1,0) {\small$\neg$\textit{vent.}};
+    \node[below=1.10cm] at (2,0) {\small\textit{vent.}$^{*}$};
+    \node[below=1.10cm] at (3,0) {\small\textit{vent.}$^{*}$};
+    \node[below=1.10cm] at (4,0) {\small\textit{vent.}};
+    \node[below=1.10cm] at (5,0) {\small\textit{vent.}};
+\end{tikzpicture}
+\end{center}
+
+\noindent Skrót \textit{alarm} oznacza fluent \langvar{alarm\_on}, \textit{vent.} oznacza \langvar{ventilation\_on}, a~$^{*}$ wskazuje na okluzję.
+
+\subsubsection*{Odpowiedź}
+\begin{enumerate}[label=\arabic*.]
+    \item \textit{True} --- scenariusz jest realizowalny.
+    \item \textit{True} --- $(activate\_alarm, 0, 1) \in E$, zatem $t=0 \in [0,1]$.
+    \item \textit{True} --- $H^*(\textit{alarm\_on},\,1)=1$ w~jedynym modelu.
+    \item \textit{True} --- $(start\_ventilation, 2, 4) \in E$, zatem $t=2 \in [2,4]$.
+    \item \textit{True} --- $H^*(\textit{ventilation\_on},\,4)=1$ w~jedynym modelu.
+\end{enumerate}
+
+\subsubsection*{Komentarz}
+
+Ten przykład pokazuje jednocześnie kilka mechanizmów języka: automatyczne wywołanie akcji przez stan systemu, skutki dynamiczne, ograniczenie wykonalności za pomocą \texttt{impossible} oraz czasową nieznajomość wartości fluentu modelowaną przez \texttt{releases}.
+
+\end{document}

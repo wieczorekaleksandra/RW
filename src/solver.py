@@ -2,6 +2,7 @@ from src.models import (
     Domain, Scenario, Model, ActionExecution,
 )
 from src.formula_eval import evaluate, get_fluents
+from src.validator import validate
 
 
 def solve(domain: Domain, scenario: Scenario) -> list:
@@ -10,6 +11,11 @@ def solve(domain: Domain, scenario: Scenario) -> list:
     dla danej dziedziny i scenariusza.
     Zwraca liste obiektow Model. Pusta lista = scenariusz nierealizowalny.
     """
+    # Walidacja scenariusza przed rozwiazywaniem
+    errors = validate(domain, scenario)
+    if errors:
+        return []
+
     time_horizon = _determine_time_horizon(domain, scenario)
 
     # Zbierz wszystkie fluenty z dziedziny i scenariusza

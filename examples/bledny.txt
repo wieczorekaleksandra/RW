@@ -1,0 +1,20 @@
+# Przyklad 3: Celowo bledny scenariusz (test walidacji)
+# Wczytaj: python3 -m src.main examples/bledny.txt
+
+DOMAIN:
+repair duration 3
+reboot duration 2
+reboot causes system_on after 2 if ~broken
+impossible reboot at 0
+
+SCENARIO:
+OBS:
+(broken, 0)
+(~broken, 0)
+ACS:
+(repair, 0)
+(reboot, 1)
+(reboot, 0)
+
+QUERIES:
+possibly Sc

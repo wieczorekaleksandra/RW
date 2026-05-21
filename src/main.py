@@ -1,162 +1,31 @@
-from src.parser import parse_domain, parse_scenario, parse_query
+from src.models import (
+    Domain, Scenario, Observation, ActionDeclaration,
+    CausesStatement, DurationStatement, ReleasesStatement,
+    TriggersStatement, StateTriggerStatement,
+    ImpossibleIfStatement, ImpossibleAtStatement,
+    AtomicFormula, Negation, Conjunction,
+    QueryPossiblyScenario, QueryPerforming, QueryCondition,
+)
 from src.solver import solve
 from src.query_engine import execute_query
 from src.validator import validate
 
 
-def main():
-    print("=" * 60)
-    print("  SCENARIUSZE DZIALAŃ — System DS1")
-    print("=" * 60)
+# ========================= POMOCNICZE =========================
 
-    # --- Wczytaj dziedzine ---
-    print("\nPodaj opis dziedziny (pusta linia konczy):")
-    domain_lines = []
-    while True:
-        line = input()
-        if line.strip() == '':
-            break
-        domain_lines.append(line)
-    domain_text = '\n'.join(domain_lines)
-    domain = parse_domain(domain_text)
-    print(f"  Wczytano dziedzine: {len(domain.durations)} akcji, "
-          f"{len(domain.causes)} skutkow, {len(domain.releases)} releases, "
-          f"{len(domain.triggers)} triggers, {len(domain.state_triggers)} wyzwalaczy stanowych")
-
-    # --- Wczytaj scenariusz ---
-    print("\nPodaj scenariusz (OBS/ACS, pusta linia konczy):")
-    scenario_lines = []
-    while True:
-        line = input()
-        if line.strip() == '':
-            break
-        scenario_lines.append(line)
-    scenario_text = '\n'.join(scenario_lines)
-    scenario = parse_scenario(scenario_text)
-    print(f"  Wczytano scenariusz: {len(scenario.observations)} obserwacji, "
-          f"{len(scenario.action_declarations)} deklaracji akcji")
-
-    # --- Walidacja ---
-    errors = validate(domain, scenario)
-    if errors:
-        print("\nBledy walidacji scenariusza:")
-        for e in errors:
-            print(f"  {e}")
-        print("\nScenariusz narusza zalozenia DS1. Przerywam.")
-        return
-
-    # --- Rozwiaz ---
-    models = _solve_and_print(domain, scenario)
-
-    # --- Kwerendy ---
-    print("\nPodaj kwerendy (pusta linia konczy):")
-    while True:
-        line = input("  > ")
-        if line.strip() == '':
-            break
-        try:
-            query = parse_query(line.strip())
-            result = execute_query(query, models)
-            print(f"  => {result}")
-        except Exception as e:
-            print(f"  Blad: {e}")
+def _query_times(queries):
+    """Wyciaga czasy wystepujace w kwerendach (do horyzontu)."""
+    times = []
+    for _, q in queries:
+        if isinstance(q, (QueryPerforming, QueryCondition)):
+            times.append(q.time)
+    return times
 
 
-def run_from_file(filepath):
-    """
-    Wczytuje dziedzine, scenariusz i kwerendy z pliku tekstowego.
-
-    Format pliku:
-        DOMAIN:
-        <instrukcje dziedziny, po jednej w linii>
-
-        SCENARIO:
-        OBS:
-        (formula, czas)
-        ACS:
-        (akcja, czas)
-
-        QUERIES:
-        <kwerendy, po jednej w linii>
-
-    Komentarze (#) i puste linie sa ignorowane.
-    """
-    with open(filepath, 'r', encoding='utf-8') as f:
-        content = f.read()
-
-    print("=" * 60)
-    print(f"  Wczytywanie z pliku: {filepath}")
-    print("=" * 60)
-
-    # Podziel na sekcje
-    domain_text, scenario_text, queries_text = _parse_file_sections(content)
-
-    # --- Dziedzina ---
-    domain = parse_domain(domain_text)
-    print(f"\n  Dziedzina: {len(domain.durations)} akcji, "
-          f"{len(domain.causes)} skutkow, {len(domain.releases)} releases, "
-          f"{len(domain.triggers)} triggers, {len(domain.state_triggers)} wyzwalaczy stanowych")
-
-    # --- Scenariusz ---
-    scenario = parse_scenario(scenario_text)
-    print(f"  Scenariusz: {len(scenario.observations)} obserwacji, "
-          f"{len(scenario.action_declarations)} deklaracji akcji")
-
-    # --- Walidacja ---
-    if not _print_validation(domain, scenario):
-        return
-
-    # --- Rozwiaz ---
-    models = _solve_and_print(domain, scenario)
-
-    # --- Kwerendy ---
-    if queries_text.strip():
-        print("\nKwerendy:")
-        for line in queries_text.strip().split('\n'):
-            line = line.strip()
-            if not line or line.startswith('#'):
-                continue
-            try:
-                query = parse_query(line)
-                result = execute_query(query, models)
-                print(f"  {line} => {result}")
-            except Exception as e:
-                print(f"  {line} => Blad: {e}")
-
-
-def _parse_file_sections(content):
-    """Dzieli plik na sekcje DOMAIN, SCENARIO, QUERIES."""
-    domain_lines = []
-    scenario_lines = []
-    queries_lines = []
-    current = None
-
-    for line in content.split('\n'):
-        stripped = line.strip().upper()
-        if stripped.startswith('DOMAIN'):
-            current = 'domain'
-            continue
-        elif stripped.startswith('SCENARIO'):
-            current = 'scenario'
-            continue
-        elif stripped.startswith('QUERIES') or stripped.startswith('QUERY'):
-            current = 'queries'
-            continue
-
-        if current == 'domain':
-            domain_lines.append(line)
-        elif current == 'scenario':
-            scenario_lines.append(line)
-        elif current == 'queries':
-            queries_lines.append(line)
-
-    return '\n'.join(domain_lines), '\n'.join(scenario_lines), '\n'.join(queries_lines)
-
-
-def _solve_and_print(domain, scenario):
+def _solve_and_print(domain, scenario, extra_times=()):
     """Generuje modele i wypisuje wyniki. Zwraca liste modeli."""
     print("\nGenerowanie modeli...")
-    models = solve(domain, scenario)
+    models = solve(domain, scenario, extra_times=extra_times)
     print(f"  Znaleziono {len(models)} model(i)")
 
     if models:
@@ -185,107 +54,174 @@ def _print_validation(domain, scenario):
     return True
 
 
+def _print_queries(queries, models):
+    """Uruchamia liste (etykieta, obiekt_kwerendy) i wypisuje wyniki."""
+    print("\nKwerendy:")
+    for label, query in queries:
+        result = execute_query(query, models)
+        print(f"  {label} => {result}")
+
+
+# ========================= PRZYKLADY =========================
+
 def run_example1():
-    """Uruchamia Przyklad 1 (projektor) automatycznie."""
+    """Przyklad 1 — Projektor."""
     print("=" * 60)
     print("  PRZYKLAD 1: Projektor")
     print("=" * 60)
 
-    domain = parse_domain("""
-press_power duration 1
-press_power releases projector_on during [0,1]
-impossible press_power if projector_on
-""")
+    # Dziedzina:
+    domain = Domain(
+        durations=[DurationStatement("press_power", 1)],
+        releases=[ReleasesStatement("press_power", "projector_on", 0, 1)],
+        impossible_if=[ImpossibleIfStatement("press_power", AtomicFormula("projector_on"))],
+    )
 
-    scenario = parse_scenario("""
-OBS:
-(~projector_on, 0)
-ACS:
-(press_power, 0)
-""")
+    # Scenariusz:
+    scenario = Scenario(
+        observations=[Observation(Negation(AtomicFormula("projector_on")), 0)],
+        action_declarations=[ActionDeclaration("press_power", 0)],
+    )
+
+    queries = [
+        ("possibly Sc",
+         QueryPossiblyScenario()),
+        ("necessary performing press_power at 0 when Sc",
+         QueryPerforming("necessary", "press_power", 0)),
+        ("necessary performing press_power at 1 when Sc",
+         QueryPerforming("necessary", "press_power", 1)),
+        ("necessary projector_on at 2 when Sc",
+         QueryCondition("necessary", AtomicFormula("projector_on"), 2)),
+        ("possibly projector_on at 2 when Sc",
+         QueryCondition("possibly", AtomicFormula("projector_on"), 2)),
+    ]
 
     if not _print_validation(domain, scenario):
         return
 
-    models = _solve_and_print(domain, scenario)
-
-    queries = [
-        "possibly Sc",
-        "necessary performing press_power at 1 when Sc",
-        "necessary projector_on at 2 when Sc",
-        "possibly projector_on at 2 when Sc",
-    ]
-    print("\nKwerendy:")
-    for q_text in queries:
-        query = parse_query(q_text)
-        result = execute_query(query, models)
-        print(f"  {q_text} => {result}")
+    models = _solve_and_print(domain, scenario, extra_times=_query_times(queries))
+    _print_queries(queries, models)
 
 
 def run_example2():
-    """Uruchamia Przyklad 2 (serwerownia) automatycznie."""
+    """Przyklad 2 — Serwerownia."""
     print("\n" + "=" * 60)
     print("  PRZYKLAD 2: Serwerownia")
     print("=" * 60)
 
-    domain = parse_domain("""
-activate_alarm duration 1
-activate_alarm causes alarm_on after 1 if smoke
-smoke causes activate_alarm
-impossible activate_alarm if maintenance
-activate_alarm triggers start_ventilation after 1
-start_ventilation duration 2
-start_ventilation releases ventilation_on during [0,2]
-start_ventilation causes ventilation_on after 2 if alarm_on
-""")
+    # Dziedzina:
+    #   activate_alarm duration 1
+    #   activate_alarm causes alarm_on after 1 if smoke
+    #   smoke causes activate_alarm                 (wyzwalacz stanowy)
+    #   impossible activate_alarm if maintenance
+    #   activate_alarm triggers start_ventilation after 1
+    #   start_ventilation duration 2
+    #   start_ventilation releases ventilation_on during [0,2]
+    #   start_ventilation causes ventilation_on after 2 if alarm_on
+    domain = Domain(
+        durations=[
+            DurationStatement("activate_alarm", 1),
+            DurationStatement("start_ventilation", 2),
+        ],
+        causes=[
+            CausesStatement("activate_alarm", AtomicFormula("alarm_on"), 1,
+                            AtomicFormula("smoke")),
+            CausesStatement("start_ventilation", AtomicFormula("ventilation_on"), 2,
+                            AtomicFormula("alarm_on")),
+        ],
+        releases=[
+            ReleasesStatement("start_ventilation", "ventilation_on", 0, 2),
+        ],
+        triggers=[
+            TriggersStatement("activate_alarm", "start_ventilation", 1),
+        ],
+        state_triggers=[
+            StateTriggerStatement(AtomicFormula("smoke"), "activate_alarm"),
+        ],
+        impossible_if=[
+            ImpossibleIfStatement("activate_alarm", AtomicFormula("maintenance")),
+        ],
+    )
 
-    scenario = parse_scenario("""
-OBS:
-(smoke & ~maintenance & ~alarm_on & ~ventilation_on, 0)
-ACS:
-""")
+    # Scenariusz:
+    #   OBS: (smoke & ~maintenance & ~alarm_on & ~ventilation_on, 0)
+    #   ACS: (puste)
+    obs_formula = Conjunction(
+        Conjunction(
+            Conjunction(
+                AtomicFormula("smoke"),
+                Negation(AtomicFormula("maintenance")),
+            ),
+            Negation(AtomicFormula("alarm_on")),
+        ),
+        Negation(AtomicFormula("ventilation_on")),
+    )
+    scenario = Scenario(
+        observations=[Observation(obs_formula, 0)],
+        action_declarations=[],
+    )
+
+    queries = [
+        ("possibly Sc",
+         QueryPossiblyScenario()),
+        ("necessary performing activate_alarm at 0 when Sc",
+         QueryPerforming("necessary", "activate_alarm", 0)),
+        ("necessary alarm_on at 1 when Sc",
+         QueryCondition("necessary", AtomicFormula("alarm_on"), 1)),
+        ("necessary performing start_ventilation at 2 when Sc",
+         QueryPerforming("necessary", "start_ventilation", 2)),
+        ("necessary ventilation_on at 4 when Sc",
+         QueryCondition("necessary", AtomicFormula("ventilation_on"), 4)),
+    ]
 
     if not _print_validation(domain, scenario):
         return
 
-    models = _solve_and_print(domain, scenario)
-
-    queries = [
-        "possibly Sc",
-        "necessary performing activate_alarm at 0 when Sc",
-        "necessary alarm_on at 1 when Sc",
-        "necessary performing start_ventilation at 2 when Sc",
-        "necessary ventilation_on at 4 when Sc",
-    ]
-    print("\nKwerendy:")
-    for q_text in queries:
-        query = parse_query(q_text)
-        result = execute_query(query, models)
-        print(f"  {q_text} => {result}")
+    models = _solve_and_print(domain, scenario, extra_times=_query_times(queries))
+    _print_queries(queries, models)
 
 
 def run_example3():
-    """Przyklad 3 — celowo bledny scenariusz (walidacja powinna go odrzucic)."""
+    """Przyklad 3 — celowo bledny scenariusz."""
     print("\n" + "=" * 60)
     print("  PRZYKLAD 3: Bledny scenariusz (test walidacji)")
     print("=" * 60)
 
-    domain = parse_domain("""
-repair duration 3
-reboot duration 2
-reboot causes system_on after 2 if ~broken
-impossible reboot at 0
-""")
+    # Dziedzina:
+    #   repair duration 3
+    #   reboot duration 2
+    #   reboot causes system_on after 2 if ~broken
+    #   impossible reboot at 0
+    domain = Domain(
+        durations=[
+            DurationStatement("repair", 3),
+            DurationStatement("reboot", 2),
+        ],
+        causes=[
+            CausesStatement(
+                "reboot",
+                AtomicFormula("system_on"),
+                2,
+                Negation(AtomicFormula("broken")),
+            ),
+        ],
+        impossible_at=[ImpossibleAtStatement("reboot", 0)],
+    )
 
-    scenario = parse_scenario("""
-OBS:
-(broken, 0)
-(~broken, 0)
-ACS:
-(repair, 0)
-(reboot, 1)
-(reboot, 0)
-""")
+    # Scenariusz (celowo bledny):
+    #   OBS: (broken, 0), (~broken, 0)               <- sprzecznosc
+    #   ACS: (repair, 0), (reboot, 1), (reboot, 0)   <- nakladanie + impossible_at
+    scenario = Scenario(
+        observations=[
+            Observation(AtomicFormula("broken"), 0),
+            Observation(Negation(AtomicFormula("broken")), 0),
+        ],
+        action_declarations=[
+            ActionDeclaration("repair", 0),
+            ActionDeclaration("reboot", 1),
+            ActionDeclaration("reboot", 0),
+        ],
+    )
 
     print("\nDziedzina:")
     print("  repair duration 3")
@@ -308,19 +244,33 @@ ACS:
         print(f"Znaleziono {len(models)} model(i)")
 
 
+# ========================= ENTRY POINT =========================
+
+def _print_usage():
+    print("Uzycie:")
+    print("  python3 -m src.main --example1   # Projektor")
+    print("  python3 -m src.main --example2   # Serwerownia")
+    print("  python3 -m src.main --example3   # Bledny scenariusz (walidator)")
+    print("  python3 -m src.main --examples   # Wszystkie powyzsze")
+
+
 if __name__ == '__main__':
     import sys
-    if len(sys.argv) > 1 and sys.argv[1] == '--example1':
+    if len(sys.argv) <= 1:
+        _print_usage()
+        sys.exit(0)
+
+    arg = sys.argv[1]
+    if arg == '--example1':
         run_example1()
-    elif len(sys.argv) > 1 and sys.argv[1] == '--example2':
+    elif arg == '--example2':
         run_example2()
-    elif len(sys.argv) > 1 and sys.argv[1] == '--example3':
+    elif arg == '--example3':
         run_example3()
-    elif len(sys.argv) > 1 and sys.argv[1] == '--examples':
+    elif arg == '--examples':
         run_example1()
         run_example2()
         run_example3()
-    elif len(sys.argv) > 1:
-        run_from_file(sys.argv[1])
     else:
-        main()
+        _print_usage()
+        sys.exit(1)

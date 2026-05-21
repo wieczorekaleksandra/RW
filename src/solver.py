@@ -5,18 +5,21 @@ from src.formula_eval import evaluate, get_fluents
 from src.validator import validate
 
 
-def solve(domain: Domain, scenario: Scenario) -> list:
+def solve(domain: Domain, scenario: Scenario, extra_times=()) -> list:
     """
     Glowna funkcja — generuje wszystkie dopuszczalne modele
     dla danej dziedziny i scenariusza.
     Zwraca liste obiektow Model. Pusta lista = scenariusz nierealizowalny.
+
+    extra_times: opcjonalne dodatkowe punkty czasowe (np. czasy z kwerend)
+    ktore maja byc objete horyzontem.
     """
     # Walidacja scenariusza przed rozwiazywaniem
     errors = validate(domain, scenario)
     if errors:
         return []
 
-    time_horizon = _determine_time_horizon(domain, scenario)
+    time_horizon = _determine_time_horizon(domain, scenario, extra_times)
 
     # Zbierz wszystkie fluenty z dziedziny i scenariusza
     all_fluents = _collect_fluents(domain, scenario)
@@ -31,22 +34,62 @@ def solve(domain: Domain, scenario: Scenario) -> list:
     return models
 
 
-def _determine_time_horizon(domain, scenario) -> int:
-    """Oblicza horyzont czasowy symulacji."""
-    max_t = 0
+def _determine_time_horizon(domain, scenario, extra_times=()) -> int:
+    """
+    Oblicza horyzont czasowy domkniety wzgledem efektow, triggerow dynamicznych
+    i akcji wyzwolonych automatycznie.
 
+    Startujemy od max(czasy obserwacji, koncow akcji z ACS, impossible_at, extra_times).
+    Potem propagujemy przez graf triggerow: kazda akcja kanczaca sie w t moze odpalic
+    triggered_action o duration d po delay δ -> nowa akcja konczy sie w t+δ+d.
+    Petla dziala dopoki nie znajdziemy nowych konsekwencji.
+
+    extra_times: dodatkowe punkty czasowe do uwzglednienia (np. z kwerend).
+    """
+    # 1. Punkty bazowe
+    max_t = 0
     for obs in scenario.observations:
         max_t = max(max_t, obs.time)
-    for ad in scenario.action_declarations:
-        dur = domain.get_duration(ad.action)
-        max_t = max(max_t, ad.time + dur)
     for imp in domain.impossible_at:
         max_t = max(max_t, imp.time_point)
+    for t in extra_times:
+        max_t = max(max_t, t)
 
-    # Dodaj margines na triggery (kaskadowe) — ale nie za duzy
-    max_duration = max((d.duration for d in domain.durations), default=1)
-    max_trigger_delay = max((t.delay for t in domain.triggers), default=0)
-    max_t += max_duration + max_trigger_delay + 2
+    # 2. Konce akcji z ACS — to sa "zrodla" propagacji triggerow.
+    #    Bedziemy domykac iteracyjnie: kazda nowo wyznaczona koncowka akcji
+    #    moze odpalic kolejny trigger.
+    action_end_times = []  # lista (action_name, end_time) do propagacji
+    for ad in scenario.action_declarations:
+        dur = domain.get_duration(ad.action)
+        action_end_times.append((ad.action, ad.time + dur))
+        max_t = max(max_t, ad.time + dur)
+
+    # 3. Propagacja przez triggery dynamiczne (a triggers a' after δ).
+    #    Stosujemy "fixed-point" — limit iteracji zabezpiecza przed nieskonczonym
+    #    cyklem (gdy trigger jest cykliczny).
+    MAX_ITERATIONS = 50
+    seen = set()  # (action, end_time) ktore juz przepropagowalismy
+    for _ in range(MAX_ITERATIONS):
+        new_ends = []
+        for (action, end_t) in action_end_times:
+            if (action, end_t) in seen:
+                continue
+            seen.add((action, end_t))
+            for tr in domain.triggers:
+                if tr.cause_action == action:
+                    triggered_start = end_t + tr.delay
+                    triggered_dur = domain.get_duration(tr.triggered_action)
+                    triggered_end = triggered_start + triggered_dur
+                    new_ends.append((tr.triggered_action, triggered_end))
+                    max_t = max(max_t, triggered_end)
+        if not new_ends:
+            break
+        action_end_times = new_ends
+
+    # 4. Maly margines (na efekty causes...after δ ktore moga wykraczac poza
+    #    koniec akcji w przyszlosci). Celowo nie dodajemy duzego buforu, zeby
+    #    cykliczne wyzwalacze stanowe nie napompowaly modelu.
+    max_t += 1
 
     return max_t
 
@@ -207,7 +250,7 @@ def _apply_state_triggers(domain, state, all_fluents, t):
     history = state['history']
     executions = state['executions']
 
-    # Sprawdz czy w chwili t juz trwa jakas akcja albo jest zaplanowana (sekwencyjnosc)
+    # Sprawdz czy w chwili t juz trwa jakas akcja albo jest zaplanowana
     # Akcje zajmuja interwaly i nie moga sie nakladac.
     # Jesli trigger dodaje akcje w t, to ta akcja trwa [t, t+dur).
     # Sprawdzamy czy [t, t+dur) naklada sie z jakakolwiek istniejaca.

@@ -26,7 +26,7 @@ def query_possibly_scenario(models) -> bool:
 def query_performing(action_name, time, models, mode) -> bool:
     """necessary/possibly performing a at t when Sc."""
     if not models:
-        return mode == "necessary"  # vacuous truth
+        return mode == "necessary"
 
     results = []
     for m in models:
@@ -42,7 +42,7 @@ def query_performing(action_name, time, models, mode) -> bool:
 def query_condition(formula, time, models, mode) -> bool:
     """necessary/possibly γ at t when Sc."""
     if not models:
-        return mode == "necessary"  # vacuous truth
+        return mode == "necessary"
 
     results = []
     for m in models:

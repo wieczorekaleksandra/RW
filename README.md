@@ -30,126 +30,154 @@ System pozwala na:
 - Python 3.10+
 - Brak zewnętrznych zależności
 
+## Status
+
+Wersja beta — silnik modeli, walidator i kwerendy działają. **Parser języka tekstowego
+został usunięty** — dziedzinę, scenariusz i kwerendy buduje się bezpośrednio z obiektów
+Pythona (`src/models.py`). Docelowy interfejs to GUI (TODO), który będzie tworzył
+te same obiekty z formularza.
+
 ## Struktura projektu
 
 ```
 src/
 ├── models.py          # Struktury danych (Formula, Domain, Scenario, Model, ...)
-├── parser.py          # Parser języka opisu akcji, scenariuszy i kwerend
 ├── formula_eval.py    # Ewaluacja formuł logicznych H*(formula, t)
+├── validator.py       # Walidacja scenariusza wzgledem zalozen DS1
 ├── solver.py          # Silnik generowania modeli
 ├── query_engine.py    # Silnik odpowiadania na kwerendy
-└── main.py            # Punkt wejścia aplikacji
+└── main.py            # Wbudowane przyklady (projektor, serwerownia, bledny)
 tests/
-├── test_parser.py     # Testy parsera
-├── test_solver.py     # Testy silnika modeli
-├── test_example1.py   # Testy — Przykład 1 (projektor)
-└── test_example2.py   # Testy — Przykład 2 (serwerownia)
+├── test_solver.py     # Testy silnika modeli (TODO)
+├── test_example1.py   # Testy — Przyklad 1 (projektor) (TODO)
+└── test_example2.py   # Testy — Przyklad 2 (serwerownia) (TODO)
 ```
 
 ## Uruchomienie
 
 ```bash
-# Tryb interaktywny
-python3 -m src.main
-
-# Wbudowane przykłady
-python3 -m src.main --example1    # Projektor
-python3 -m src.main --example2    # Serwerownia
-python3 -m src.main --examples    # Oba przykłady
+python3 -m src.main --example1    # Projektor (niedeterminizm z releases)
+python3 -m src.main --example2    # Serwerownia (state trigger + dynamic trigger)
+python3 -m src.main --example3    # Bledny scenariusz (walidator)
+python3 -m src.main --examples    # Wszystkie powyzsze
 ```
 
-## Język opisu akcji
+## Model czasu
 
-Każda instrukcja w osobnej linii:
+**Półotwarta interpretacja czasu trwania akcji.** Jeżeli akcja `a` rozpoczyna się
+w chwili `t0` i ma czas trwania `d`, to:
 
+- akcja jest **wykonywana** w chwilach `τ` spełniających `t0 ≤ τ < t0 + d`
+- chwila `t0 + d` jest momentem **zakończenia** akcji — pojawiają się w niej efekty
+  końcowe (`causes ... after d`) i mogą wystartować akcje wyzwalane dynamicznie
+  (`triggers ... after 0`)
+- kolejna akcja może rozpocząć się w chwili `t0 + d` bez naruszenia sekwencyjności
+
+Czyli `(a, 0, 2)` znaczy: `a` wykonuje się w `τ = 0, 1`, kończy się w `2`, efekt
+w `2`. Następna akcja może startować w `2`.
+
+Reguły szczegółowe:
+- `a causes α after δ if π`: efekt `α` zachodzi w `t0 + δ`, warunek `π` sprawdzany w `t0`
+- `a triggers a' after δ`: akcja `a'` startuje w `end_time + δ` (przy `δ = 0` od razu)
+- `α causes a` (wyzwalacz stanowy): gdy `α` zachodzi w `t` i nie trwa żadna inna akcja,
+  startuje `a` w `t`
+- `impossible a if α` / `impossible a at t`: blokuje **start** akcji
+
+**Horyzont modelu** jest domknięty względem efektów, łańcuchów triggerów dynamicznych
+oraz czasów występujących w kwerendach (BFS przez graf wyzwoleń w
+[solver.py: _determine_time_horizon](src/solver.py#L34)). Wyzwalacze stanowe są
+trudne do statycznego przewidzenia, więc dla nich pozostaje krótki margines.
+
+## Język opisu akcji (API Pythona)
+
+Wszystkie konstrukcje języka mają odpowiadające klasy w `src/models.py`.
+
+```python
+from src.models import (
+    Domain, DurationStatement, CausesStatement, ReleasesStatement,
+    TriggersStatement, StateTriggerStatement,
+    ImpossibleIfStatement, ImpossibleAtStatement,
+    AtomicFormula, Negation, Conjunction,
+)
+
+domain = Domain(
+    # Czas trwania: press_power duration 1
+    durations=[DurationStatement("press_power", 1)],
+
+    # Skutek po opoznieniu z warunkiem: a causes alarm_on after 1 if smoke
+    causes=[CausesStatement(
+        action="activate_alarm",
+        effect=AtomicFormula("alarm_on"),
+        delay=1,
+        condition=AtomicFormula("smoke"),
+    )],
+
+    # Okluzja fluentu w przedziale: press_power releases projector_on during [0,1]
+    releases=[ReleasesStatement("press_power", "projector_on", 0, 1)],
+
+    # Skutek dynamiczny: activate_alarm triggers start_ventilation after 1
+    triggers=[TriggersStatement("activate_alarm", "start_ventilation", 1)],
+
+    # Wyzwalacz stanowy: smoke causes activate_alarm
+    state_triggers=[StateTriggerStatement(
+        condition=AtomicFormula("smoke"),
+        action="activate_alarm",
+    )],
+
+    # Niewykonalnosc:
+    impossible_if=[ImpossibleIfStatement(
+        action="press_power",
+        condition=AtomicFormula("projector_on"),
+    )],
+    impossible_at=[ImpossibleAtStatement("reboot", 0)],
+)
 ```
-# Czas trwania akcji
-press_power duration 1
 
-# Skutek akcji (efekt po delta krokach, opcjonalny warunek)
-activate_alarm causes alarm_on after 1 if smoke
+### Klasy formuł
 
-# Zawieszenie inercji (okluzja fluentu w przedziale)
-press_power releases projector_on during [0,1]
+| Klasa                       | Znaczenie                |
+| --------------------------- | ------------------------ |
+| `AtomicFormula("f")`        | atom (fluent)            |
+| `Negation(F)`               | negacja `~F`             |
+| `Conjunction(F1, F2)`       | koniunkcja `F1 & F2`     |
+| `Disjunction(F1, F2)`       | alternatywa `F1 \| F2`   |
+| `Implication(F1, F2)`       | implikacja `F1 -> F2`    |
+| `Equivalence(F1, F2)`       | równoważność `F1 <-> F2` |
 
-# Skutek dynamiczny (po zakończeniu a, po delta krokach startuje a')
-activate_alarm triggers start_ventilation after 1
+## Scenariusz
 
-# Wyzwalacz stanowy (stan systemu automatycznie wywołuje akcję)
-smoke causes activate_alarm
+```python
+from src.models import Scenario, Observation, ActionDeclaration
 
-# Niewykonalność akcji
-impossible press_power if projector_on
-impossible press_power at 5
+scenario = Scenario(
+    observations=[
+        Observation(Negation(AtomicFormula("projector_on")), time=0),
+    ],
+    action_declarations=[
+        ActionDeclaration("press_power", time=0),
+    ],
+)
 ```
-
-## Format scenariusza
-
-```
-OBS:
-(~projector_on, 0)
-(smoke & ~maintenance, 0)
-ACS:
-(press_power, 0)
-```
-
-`OBS` — obserwacje (formuła, chwila czasowa).
-`ACS` — deklaracje akcji (nazwa akcji, chwila startu). Może być puste.
-
-## Składnia formuł logicznych
-
-| Operator | Znaczenie |
-|----------|-----------|
-| `~`      | negacja |
-| `&`      | koniunkcja (AND) |
-| `\|`     | alternatywa (OR) |
-| `->`     | implikacja |
-| `<->`    | równoważność |
-| `()`     | grupowanie |
-
-Priorytet (od najwyższego): `~` > `&` > `|` > `->` > `<->`
 
 ## Kwerendy
 
-```
-# Czy scenariusz jest realizowalny?
-possibly Sc
+```python
+from src.models import QueryPossiblyScenario, QueryPerforming, QueryCondition
+from src.solver import solve
+from src.query_engine import execute_query
 
-# Czy akcja jest wykonywana w chwili t? (w każdym / w jakimś modelu)
-necessary performing press_power at 1 when Sc
-possibly performing activate_alarm at 0 when Sc
+models = solve(domain, scenario)
 
-# Czy warunek zachodzi w chwili t? (w każdym / w jakimś modelu)
-necessary alarm_on at 1 when Sc
-possibly projector_on at 2 when Sc
-necessary ~maintenance at 0 when Sc
-```
+# possibly Sc — czy scenariusz jest realizowalny?
+execute_query(QueryPossiblyScenario(), models)
 
-## Przykład sesji interaktywnej
+# necessary/possibly performing a at t when Sc
+execute_query(QueryPerforming("necessary", "press_power", 1), models)
+execute_query(QueryPerforming("possibly", "activate_alarm", 0), models)
 
-```
-Podaj opis dziedziny (pusta linia kończy):
-press_power duration 1
-press_power releases projector_on during [0,1]
-impossible press_power if projector_on
-
-Podaj scenariusz (OBS/ACS, pusta linia kończy):
-OBS:
-(~projector_on, 0)
-ACS:
-(press_power, 0)
-
-Generowanie modeli...
-  Znaleziono 2 model(i)
-
-Podaj kwerendy (pusta linia kończy):
-  > possibly Sc
-  => True
-  > necessary projector_on at 2 when Sc
-  => False
-  > possibly projector_on at 2 when Sc
-  => True
+# necessary/possibly γ at t when Sc
+execute_query(QueryCondition("necessary", AtomicFormula("alarm_on"), 1), models)
+execute_query(QueryCondition("possibly", AtomicFormula("projector_on"), 2), models)
 ```
 
 ## Założenia klasy DS1

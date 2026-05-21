@@ -131,7 +131,6 @@ def _check_undefined_actions_in_acs(domain, scenario) -> list:
     """
     errors = []
     defined_actions = {d.action for d in domain.durations}
-    # Dodaj akcje które pojawiają się w causes/triggers/etc.
     all_known = set(defined_actions)
     for c in domain.causes:
         all_known.add(c.action)

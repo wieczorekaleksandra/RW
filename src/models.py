@@ -165,7 +165,10 @@ class ActionExecution:
     end_time: int
 
     def active_at(self, t: int) -> bool:
-        return self.start_time <= t <= self.end_time
+        # Polotwarty przedzial [start_time, end_time):
+        # akcja o duration d startujaca w t0 trwa w chwilach t0..t0+d-1,
+        # konczy sie w t0+d (efekty/triggery odpalaja sie w tej chwili).
+        return self.start_time <= t < self.end_time
 
 
 @dataclass

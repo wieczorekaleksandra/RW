@@ -1,10 +1,13 @@
-"""GUI tkinter dla systemu DS1 — Scenariusze Dzialan.
+"""GUI tkinter dla systemu DS1 — Scenariusze Działań.
 
-Uruchom: python3 -m src.main --gui
+Ultra-modern 2026 dark theme with custom widgets, gradients,
+rounded corners, hover animations, glassmorphism cards.
+
+Uruchom: python -m src.main --gui
 """
 
 import tkinter as tk
-from tkinter import ttk, messagebox, simpledialog, scrolledtext
+from tkinter import ttk, messagebox, simpledialog, font as tkfont
 import io
 import contextlib
 
@@ -26,90 +29,381 @@ from src.examples.helpers import (
 )
 
 
-# ============================================================
-# Pomocnicze: konstrukcja formul AND
-# ============================================================
+# ═══════════════════════════════════════════════════════════════
+# DESIGN SYSTEM 2026
+# ═══════════════════════════════════════════════════════════════
+
+class Theme:
+    # Base
+    BG = '#0d1117'
+    BG_SECONDARY = '#161b22'
+    BG_TERTIARY = '#1c2128'
+    SURFACE = '#21262d'
+    SURFACE_HOVER = '#292e36'
+    
+    # Accent
+    PRIMARY = '#8b5cf6'
+    PRIMARY_HOVER = '#a78bfa'
+    PRIMARY_DIM = '#6d28d9'
+    PRIMARY_GLOW = '#8b5cf620'
+    
+    # Semantic
+    SUCCESS = '#34d399'
+    SUCCESS_DIM = '#065f46'
+    WARNING = '#fbbf24'
+    ERROR = '#f87171'
+    INFO = '#60a5fa'
+    
+    # Text
+    FG = '#e6edf3'
+    FG_MUTED = '#8b949e'
+    FG_SUBTLE = '#484f58'
+    
+    # Border
+    BORDER = '#30363d'
+    BORDER_ACCENT = '#8b5cf640'
+    
+    # Fonts
+    FONT_FAMILY = 'Segoe UI'
+    FONT_MONO = 'Cascadia Code'
+    
+    # Sizing
+    RADIUS = 12
+    PADDING = 16
+    GAP = 12
+
+
+# ═══════════════════════════════════════════════════════════════
+# CUSTOM WIDGETS
+# ═══════════════════════════════════════════════════════════════
+
+class ModernButton(tk.Canvas):
+    """Animated button with rounded corners, hover glow, and press effect."""
+    
+    def __init__(self, parent, text="", command=None, width=120, height=36,
+                 bg=Theme.PRIMARY, hover_bg=Theme.PRIMARY_HOVER, fg='#fff',
+                 font_size=10, radius=8, style='filled', **kwargs):
+        super().__init__(parent, width=width, height=height, 
+                        bg=parent.cget('bg') if hasattr(parent, 'cget') else Theme.BG,
+                        highlightthickness=0, **kwargs)
+        
+        self._text = text
+        self._command = command
+        self._bg = bg
+        self._hover_bg = hover_bg
+        self._fg = fg
+        self._radius = radius
+        self._style = style
+        self._hover = False
+        self._pressed = False
+        self._font = (Theme.FONT_FAMILY, font_size, 'bold')
+        
+        self._draw()
+        
+        self.bind('<Enter>', self._on_enter)
+        self.bind('<Leave>', self._on_leave)
+        self.bind('<ButtonPress-1>', self._on_press)
+        self.bind('<ButtonRelease-1>', self._on_release)
+    
+    def _draw(self):
+        self.delete('all')
+        w, h = int(self.cget('width')), int(self.cget('height'))
+        r = self._radius
+        
+        if self._style == 'filled':
+            color = self._hover_bg if self._hover else self._bg
+            outline = ''
+        elif self._style == 'outline':
+            color = Theme.SURFACE_HOVER if self._hover else ''
+            outline = self._bg
+        elif self._style == 'ghost':
+            color = Theme.SURFACE_HOVER if self._hover else ''
+            outline = ''
+        
+        # Glow effect on hover
+        if self._hover and self._style == 'filled':
+            self._rounded_rect(0, 0, w, h, r+2, fill='', outline=self._bg, width=2)
+        
+        # Main button shape
+        self._rounded_rect(2, 2, w-2, h-2, r, fill=color, outline=outline,
+                          width=1 if outline else 0)
+        
+        # Text
+        text_color = self._fg if self._style == 'filled' else self._bg
+        if self._style == 'ghost':
+            text_color = self._fg
+        offset = 1 if self._pressed else 0
+        self.create_text(w//2, h//2 + offset, text=self._text, fill=text_color,
+                        font=self._font)
+    
+    def _rounded_rect(self, x1, y1, x2, y2, r, **kwargs):
+        points = [
+            x1+r, y1, x2-r, y1, x2, y1, x2, y1+r,
+            x2, y2-r, x2, y2, x2-r, y2, x1+r, y2,
+            x1, y2, x1, y2-r, x1, y1+r, x1, y1,
+        ]
+        self.create_polygon(points, smooth=True, **kwargs)
+    
+    def _on_enter(self, e):
+        self._hover = True
+        self._draw()
+        
+    def _on_leave(self, e):
+        self._hover = False
+        self._pressed = False
+        self._draw()
+    
+    def _on_press(self, e):
+        self._pressed = True
+        self._draw()
+    
+    def _on_release(self, e):
+        self._pressed = False
+        self._draw()
+        if self._hover and self._command:
+            self._command()
+
+
+class ModernEntry(tk.Frame):
+    """Styled entry with focus glow."""
+    
+    def __init__(self, parent, placeholder="", width=20, **kwargs):
+        super().__init__(parent, bg=parent.cget('bg') if hasattr(parent, 'cget') else Theme.BG)
+        
+        self._placeholder = placeholder
+        
+        self._border = tk.Frame(self, bg=Theme.BORDER, padx=1, pady=1)
+        self._border.pack(fill='x')
+        
+        self._inner = tk.Frame(self._border, bg=Theme.SURFACE, padx=8, pady=5)
+        self._inner.pack(fill='x')
+        
+        self._entry = tk.Entry(self._inner, bg=Theme.SURFACE, fg=Theme.FG,
+                              insertbackground=Theme.PRIMARY, font=(Theme.FONT_FAMILY, 10),
+                              relief='flat', width=width, borderwidth=0)
+        self._entry.pack(fill='x')
+        
+        self._entry.bind('<FocusIn>', self._on_focus_in)
+        self._entry.bind('<FocusOut>', self._on_focus_out)
+        
+        if placeholder:
+            self._entry.insert(0, placeholder)
+            self._entry.config(fg=Theme.FG_MUTED)
+            self._entry.bind('<FocusIn>', self._clear_placeholder)
+            self._entry.bind('<FocusOut>', self._show_placeholder)
+    
+    def _on_focus_in(self, e):
+        self._border.config(bg=Theme.PRIMARY)
+        
+    def _on_focus_out(self, e):
+        self._border.config(bg=Theme.BORDER)
+    
+    def _clear_placeholder(self, e):
+        if self._entry.get() == self._placeholder:
+            self._entry.delete(0, 'end')
+            self._entry.config(fg=Theme.FG)
+        self._on_focus_in(e)
+    
+    def _show_placeholder(self, e):
+        if not self._entry.get():
+            self._entry.insert(0, self._placeholder)
+            self._entry.config(fg=Theme.FG_MUTED)
+        self._on_focus_out(e)
+    
+    def get(self):
+        val = self._entry.get()
+        return '' if val == self._placeholder else val
+    
+    def delete(self, first, last):
+        self._entry.delete(first, last)
+        if self._placeholder:
+            self._show_placeholder(None)
+    
+    def bind_key(self, key, func):
+        self._entry.bind(key, func)
+
+
+class ModernListbox(tk.Frame):
+    """Custom styled listbox with dark theme."""
+    
+    def __init__(self, parent, height=10, **kwargs):
+        super().__init__(parent, bg=Theme.SURFACE, highlightthickness=1,
+                        highlightbackground=Theme.BORDER, highlightcolor=Theme.PRIMARY)
+        
+        self._listbox = tk.Listbox(self, height=height, font=(Theme.FONT_MONO, 9),
+                                  bg=Theme.SURFACE, fg=Theme.FG,
+                                  selectbackground=Theme.PRIMARY,
+                                  selectforeground='#fff',
+                                  activestyle='none', relief='flat',
+                                  borderwidth=0, highlightthickness=0)
+        
+        scrollbar = tk.Scrollbar(self, orient='vertical', command=self._listbox.yview,
+                                bg=Theme.SURFACE, troughcolor=Theme.BG_SECONDARY,
+                                activebackground=Theme.FG_SUBTLE, width=8)
+        self._listbox.config(yscrollcommand=scrollbar.set)
+        
+        scrollbar.pack(side='right', fill='y', padx=(0, 2), pady=4)
+        self._listbox.pack(side='left', fill='both', expand=True, padx=8, pady=6)
+    
+    def insert(self, idx, item):
+        self._listbox.insert(idx, f"  {item}")
+    
+    def delete(self, first, last=''):
+        if last:
+            self._listbox.delete(first, last)
+        else:
+            self._listbox.delete(first)
+    
+    def curselection(self):
+        return self._listbox.curselection()
+
+
+class TabBar(tk.Frame):
+    """Custom modern tab bar with animated underline."""
+    
+    def __init__(self, parent, tabs, command=None):
+        super().__init__(parent, bg=Theme.BG_SECONDARY, height=44)
+        self.pack_propagate(False)
+        self._tabs = tabs
+        self._command = command
+        self._active = 0
+        self._tab_labels = []
+        
+        for i, (text, _) in enumerate(tabs):
+            lbl = tk.Label(self, text=text, bg=Theme.BG_SECONDARY, 
+                          fg=Theme.FG if i == 0 else Theme.FG_MUTED,
+                          font=(Theme.FONT_FAMILY, 10, 'bold' if i == 0 else 'normal'),
+                          padx=18, pady=11, cursor='hand2')
+            lbl.pack(side='left')
+            lbl.bind('<Button-1>', lambda e, idx=i: self._select(idx))
+            lbl.bind('<Enter>', lambda e, l=lbl, idx=i: l.config(fg=Theme.PRIMARY_HOVER) if idx != self._active else None)
+            lbl.bind('<Leave>', lambda e, l=lbl, idx=i: l.config(fg=Theme.FG if idx == self._active else Theme.FG_MUTED))
+            self._tab_labels.append(lbl)
+        
+        # Underline indicator
+        self._underline = tk.Frame(self, bg=Theme.PRIMARY, height=3)
+        self._underline.place(x=0, y=41, width=100)
+        self.after(50, self._update_underline)
+    
+    def _select(self, idx):
+        old = self._active
+        self._active = idx
+        self._tab_labels[old].config(fg=Theme.FG_MUTED, font=(Theme.FONT_FAMILY, 10))
+        self._tab_labels[idx].config(fg=Theme.FG, font=(Theme.FONT_FAMILY, 10, 'bold'))
+        self._update_underline()
+        if self._command:
+            self._command(idx)
+    
+    def _update_underline(self):
+        if self._tab_labels:
+            lbl = self._tab_labels[self._active]
+            x = lbl.winfo_x()
+            w = lbl.winfo_width()
+            if w > 1:
+                self._underline.place(x=x, width=w)
+            else:
+                self.after(50, self._update_underline)
+
+
+class ContentPanel(tk.Frame):
+    """Panel that shows/hides frames based on tab selection."""
+    
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent, bg=Theme.BG, **kwargs)
+        self._frames = []
+        self._active = 0
+    
+    def add_frame(self, frame):
+        self._frames.append(frame)
+        if len(self._frames) == 1:
+            frame.pack(fill='both', expand=True)
+    
+    def show(self, idx):
+        self._frames[self._active].pack_forget()
+        self._active = idx
+        self._frames[idx].pack(fill='both', expand=True)
+
+
+# ═══════════════════════════════════════════════════════════════
+# FORMULA HELPERS
+# ═══════════════════════════════════════════════════════════════
 
 def _and_of_literals(literals):
-    """Z listy par (fluent, is_positive) zwraca formule AND literalow."""
     if not literals:
         return None
-
     def lit(name, pos):
         a = AtomicFormula(name)
         return a if pos else Negation(a)
-
     formula = lit(*literals[0])
     for name, pos in literals[1:]:
         formula = Conjunction(formula, lit(name, pos))
     return formula
 
 
-# ============================================================
-# Dialog: zbuduj formule (AND literalow)
-# ============================================================
+# ═══════════════════════════════════════════════════════════════
+# DIALOGS (Modern styled)
+# ═══════════════════════════════════════════════════════════════
 
 class FormulaDialog(tk.Toplevel):
-    """Dialog wyboru AND wybranych literalow.
-
-    Dla kazdego fluentu wybierasz: True / False / Pomin.
-    Wynik to AND wybranych literalow.
-    """
-
     def __init__(self, parent, fluents, title="Zbuduj formule", required=True):
         super().__init__(parent)
         self.title(title)
         self.transient(parent)
         self.grab_set()
         self.resizable(False, False)
-
+        self.configure(bg=Theme.BG)
+        
         self.fluents = fluents
         self.required = required
         self.result = None
         self.choices = {}
 
-        body = ttk.Frame(self, padding=12)
-        body.pack(fill="both", expand=True)
-
         if not fluents:
-            ttk.Label(
-                body,
-                text="Brak zdefiniowanych fluentow.\n"
-                     "Dodaj fluenty w zakladce 'Fluenty i akcje'.",
-                foreground="darkred",
-            ).pack(pady=20)
-            ttk.Button(body, text="OK", command=self.cancel).pack()
+            lbl = tk.Label(self, text="⚠️ Brak fluentów.\nDodaj w zakładce 'Fluenty i akcje'.",
+                          fg=Theme.WARNING, bg=Theme.BG, font=(Theme.FONT_FAMILY, 11))
+            lbl.pack(pady=30, padx=30)
+            ModernButton(self, text="OK", command=self.cancel, width=80, height=32,
+                        font_size=9).pack(pady=10)
             self.wait_window()
             return
 
-        ttk.Label(
-            body,
-            text="Wybierz wartosc kazdego fluentu (lub pomin):",
-            font=("", 10, "bold"),
-        ).grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 8))
+        # Title
+        tk.Label(self, text="Wybierz wartość fluentów:", fg=Theme.FG, bg=Theme.BG,
+                font=(Theme.FONT_FAMILY, 12, 'bold')).pack(pady=(16, 12), padx=20, anchor='w')
 
-        # Naglowki kolumn
-        ttk.Label(body, text="Fluent").grid(row=1, column=0, sticky="w", padx=5, pady=2)
-        ttk.Label(body, text="True", width=8).grid(row=1, column=1, padx=5, pady=2)
-        ttk.Label(body, text="False", width=8).grid(row=1, column=2, padx=5, pady=2)
-        ttk.Label(body, text="Pomin", width=8).grid(row=1, column=3, padx=5, pady=2)
+        # Headers
+        hdr = tk.Frame(self, bg=Theme.BG)
+        hdr.pack(fill='x', padx=20)
+        tk.Label(hdr, text="Fluent", fg=Theme.FG_MUTED, bg=Theme.BG, width=20, anchor='w',
+                font=(Theme.FONT_FAMILY, 9, 'bold')).pack(side='left')
+        for t in ['True', 'False', 'Pomiń']:
+            tk.Label(hdr, text=t, fg=Theme.FG_MUTED, bg=Theme.BG, width=8,
+                    font=(Theme.FONT_FAMILY, 9, 'bold')).pack(side='left')
 
-        ttk.Separator(body, orient="horizontal").grid(
-            row=2, column=0, columnspan=4, sticky="ew", pady=4
-        )
+        tk.Frame(self, bg=Theme.BORDER, height=1).pack(fill='x', padx=20, pady=6)
 
-        for i, f in enumerate(fluents):
+        # Rows
+        for f in fluents:
+            row = tk.Frame(self, bg=Theme.BG)
+            row.pack(fill='x', padx=20, pady=3)
             var = tk.StringVar(value="skip")
             self.choices[f] = var
-            ttk.Label(body, text=f).grid(row=3 + i, column=0, sticky="w", padx=5, pady=1)
-            ttk.Radiobutton(body, variable=var, value="true").grid(row=3 + i, column=1)
-            ttk.Radiobutton(body, variable=var, value="false").grid(row=3 + i, column=2)
-            ttk.Radiobutton(body, variable=var, value="skip").grid(row=3 + i, column=3)
+            tk.Label(row, text=f, fg=Theme.FG, bg=Theme.BG, width=20, anchor='w',
+                    font=(Theme.FONT_MONO, 10)).pack(side='left')
+            for val in ['true', 'false', 'skip']:
+                tk.Radiobutton(row, variable=var, value=val, bg=Theme.BG,
+                              fg=Theme.FG, selectcolor=Theme.PRIMARY_DIM,
+                              activebackground=Theme.BG, activeforeground=Theme.FG,
+                              highlightthickness=0, width=6).pack(side='left')
 
-        btns = ttk.Frame(self, padding=10)
-        btns.pack(fill="x")
-        ttk.Button(btns, text="OK", command=self.ok).pack(side="right", padx=5)
-        ttk.Button(btns, text="Anuluj", command=self.cancel).pack(side="right")
+        # Buttons
+        btn_frame = tk.Frame(self, bg=Theme.BG)
+        btn_frame.pack(fill='x', padx=20, pady=16)
+        ModernButton(btn_frame, text="✓ Zatwierdź", command=self.ok, width=110, height=34,
+                    font_size=9).pack(side='right', padx=4)
+        ModernButton(btn_frame, text="Anuluj", command=self.cancel, width=90, height=34,
+                    bg=Theme.SURFACE, hover_bg=Theme.SURFACE_HOVER, fg=Theme.FG_MUTED,
+                    font_size=9, style='outline').pack(side='right', padx=4)
 
         self.wait_window()
 
@@ -121,13 +415,9 @@ class FormulaDialog(tk.Toplevel):
                 literals.append((f, True))
             elif val == "false":
                 literals.append((f, False))
-
         if self.required and not literals:
-            messagebox.showerror(
-                "Blad", "Wybierz co najmniej jeden literal.", parent=self
-            )
+            messagebox.showerror("Błąd", "Wybierz co najmniej jeden literal.", parent=self)
             return
-
         self.result = _and_of_literals(literals)
         self.destroy()
 
@@ -136,50 +426,49 @@ class FormulaDialog(tk.Toplevel):
         self.destroy()
 
 
-# ============================================================
-# Dialog: wybierz jeden literal (atom lub negacja)
-# ============================================================
-
 class LiteralDialog(tk.Toplevel):
-    """Dialog wyboru pojedynczego literalu (atom albo negacja atomu)."""
-
     def __init__(self, parent, fluents, title="Wybierz literal"):
         super().__init__(parent)
         self.title(title)
         self.transient(parent)
         self.grab_set()
         self.resizable(False, False)
-
+        self.configure(bg=Theme.BG)
         self.result = None
 
-        body = ttk.Frame(self, padding=12)
-        body.pack(fill="both", expand=True)
-
         if not fluents:
-            ttk.Label(
-                body,
-                text="Brak fluentow. Dodaj w zakladce 'Fluenty i akcje'.",
-                foreground="darkred",
-            ).pack(pady=20)
-            ttk.Button(body, text="OK", command=self.cancel).pack()
+            tk.Label(self, text="⚠️ Brak fluentów.", fg=Theme.WARNING, bg=Theme.BG,
+                    font=(Theme.FONT_FAMILY, 11)).pack(pady=30, padx=30)
+            ModernButton(self, text="OK", command=self.cancel, width=80, height=32).pack(pady=10)
             self.wait_window()
             return
 
-        ttk.Label(body, text="Fluent:").grid(row=0, column=0, sticky="w", padx=5, pady=4)
+        tk.Label(self, text="Wybierz fluent:", fg=Theme.FG, bg=Theme.BG,
+                font=(Theme.FONT_FAMILY, 12, 'bold')).pack(pady=(16, 12), padx=20, anchor='w')
+
+        # Combobox
+        combo_frame = tk.Frame(self, bg=Theme.SURFACE, padx=8, pady=6)
+        combo_frame.pack(fill='x', padx=20, pady=4)
         self.fluent_var = tk.StringVar(value=fluents[0])
-        ttk.Combobox(
-            body, textvariable=self.fluent_var, values=fluents, state="readonly", width=25
-        ).grid(row=0, column=1, padx=5, pady=4)
+        combo = ttk.Combobox(combo_frame, textvariable=self.fluent_var, values=fluents,
+                           state="readonly", width=30, font=(Theme.FONT_FAMILY, 10))
+        combo.pack()
 
+        # Negation
         self.negated_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(body, text="Negacja (~)", variable=self.negated_var).grid(
-            row=1, column=0, columnspan=2, sticky="w", padx=5, pady=4
-        )
+        chk = tk.Checkbutton(self, text="  Negacja (~)", variable=self.negated_var,
+                            bg=Theme.BG, fg=Theme.FG, selectcolor=Theme.PRIMARY_DIM,
+                            activebackground=Theme.BG, activeforeground=Theme.FG,
+                            font=(Theme.FONT_FAMILY, 10), highlightthickness=0)
+        chk.pack(padx=20, pady=12, anchor='w')
 
-        btns = ttk.Frame(self, padding=10)
-        btns.pack(fill="x")
-        ttk.Button(btns, text="OK", command=self.ok).pack(side="right", padx=5)
-        ttk.Button(btns, text="Anuluj", command=self.cancel).pack(side="right")
+        btn_frame = tk.Frame(self, bg=Theme.BG)
+        btn_frame.pack(fill='x', padx=20, pady=14)
+        ModernButton(btn_frame, text="✓ OK", command=self.ok, width=90, height=34,
+                    font_size=9).pack(side='right', padx=4)
+        ModernButton(btn_frame, text="Anuluj", command=self.cancel, width=90, height=34,
+                    bg=Theme.SURFACE, hover_bg=Theme.SURFACE_HOVER, fg=Theme.FG_MUTED,
+                    font_size=9, style='outline').pack(side='right', padx=4)
 
         self.wait_window()
 
@@ -194,454 +483,537 @@ class LiteralDialog(tk.Toplevel):
         self.destroy()
 
 
-# ============================================================
-# Glowna aplikacja
-# ============================================================
+# ═══════════════════════════════════════════════════════════════
+# MAIN APPLICATION
+# ═══════════════════════════════════════════════════════════════
 
 class DS1App:
     def __init__(self, root):
         self.root = root
-        self.root.title("DS1 — Scenariusze Dzialan")
-        self.root.geometry("1000x720")
+        self.root.title("DS1 — Scenariusze Działań")
+        self.root.geometry("1280x820")
+        self.root.configure(bg=Theme.BG)
+        self.root.minsize(1000, 700)
 
-        # Stan: slownik (fluenty, akcje) + listy instrukcji
         self.fluents = []
         self.actions = []
-        self.domain_items = []  # flat lista DurationStatement/CausesStatement/...
-        self.observations = []  # lista Observation
-        self.acs = []           # lista ActionDeclaration
-        self.queries = []       # lista (label_string, query_obj)
+        self.domain_items = []
+        self.observations = []
+        self.acs = []
+        self.queries = []
 
         self._build_ui()
 
-    # =============== Konstrukcja UI ===============
-
     def _build_ui(self):
-        # Pasek narzedzi (gora)
-        toolbar = ttk.Frame(self.root, padding=8)
-        toolbar.pack(fill="x")
+        # ═══ HEADER ═══
+        header = tk.Frame(self.root, bg=Theme.BG_SECONDARY, height=56)
+        header.pack(fill='x')
+        header.pack_propagate(False)
+        
+        # Logo
+        logo_frame = tk.Frame(header, bg=Theme.BG_SECONDARY)
+        logo_frame.pack(side='left', padx=20, pady=10)
+        
+        tk.Label(logo_frame, text="◆", fg=Theme.PRIMARY, bg=Theme.BG_SECONDARY,
+                font=(Theme.FONT_FAMILY, 18)).pack(side='left', padx=(0, 8))
+        tk.Label(logo_frame, text="DS1", fg=Theme.FG, bg=Theme.BG_SECONDARY,
+                font=(Theme.FONT_FAMILY, 14, 'bold')).pack(side='left')
+        tk.Label(logo_frame, text="Scenariusze Działań", fg=Theme.FG_MUTED, 
+                bg=Theme.BG_SECONDARY, font=(Theme.FONT_FAMILY, 10)).pack(side='left', padx=(8, 0))
+        
+        # Header buttons
+        hdr_btns = tk.Frame(header, bg=Theme.BG_SECONDARY)
+        hdr_btns.pack(side='right', padx=16, pady=10)
+        
+        ModernButton(hdr_btns, text="▶ Rozwiąż", command=self.solve_and_display,
+                    width=110, height=34, font_size=10, bg=Theme.SUCCESS,
+                    hover_bg='#4ade80').pack(side='right', padx=6)
+        ModernButton(hdr_btns, text="🗑 Wyczyść", command=self.clear_all,
+                    width=100, height=34, font_size=9, style='ghost',
+                    bg=Theme.ERROR, hover_bg=Theme.SURFACE_HOVER, fg=Theme.FG_MUTED
+                    ).pack(side='right', padx=4)
 
-        ttk.Label(toolbar, text="Wczytaj przyklad:").pack(side="left", padx=(0, 6))
-        examples = [
-            (1, "Projektor"),
-            (2, "Serwerownia"),
-            (3, "Bledny"),
-            (4, "Smoke wraca"),
-            (5, "Z5 precondition"),
+        # ═══ EXAMPLES BAR ═══
+        examples_bar = tk.Frame(self.root, bg=Theme.BG, height=44)
+        examples_bar.pack(fill='x', padx=20, pady=(8, 0))
+        
+        tk.Label(examples_bar, text="Przykłady:", fg=Theme.FG_MUTED, bg=Theme.BG,
+                font=(Theme.FONT_FAMILY, 9)).pack(side='left', padx=(0, 10))
+        
+        ex_data = [
+            (1, "📺 Projektor"), (2, "🏢 Serwerownia"), (3, "🐞 Błędny"),
+            (4, "💨 Smoke"), (5, "⚙️ Z5"),
         ]
-        for n, name in examples:
-            ttk.Button(
-                toolbar, text=f"#{n} {name}",
-                command=lambda nn=n: self.load_example(nn),
-            ).pack(side="left", padx=2)
+        for n, name in ex_data:
+            ModernButton(examples_bar, text=name, 
+                        command=lambda nn=n: self.load_example(nn),
+                        width=100, height=28, font_size=9,
+                        bg=Theme.SURFACE, hover_bg=Theme.SURFACE_HOVER,
+                        fg=Theme.FG_MUTED, style='outline', radius=6
+                        ).pack(side='left', padx=3)
 
-        ttk.Button(toolbar, text="Wyczysc wszystko", command=self.clear_all).pack(
-            side="right"
-        )
-
-        # Glowne taby
-        self.notebook = ttk.Notebook(self.root)
-        self.notebook.pack(fill="both", expand=True, padx=8, pady=4)
-
-        self._build_setup_tab()
-        self._build_domain_tab()
-        self._build_scenario_tab()
-        self._build_queries_tab()
-        self._build_results_tab()
-
-        # Dol: glowne przyciski
-        bottom = ttk.Frame(self.root, padding=8)
-        bottom.pack(fill="x")
-        solve_btn = ttk.Button(bottom, text="ROZWIAZ ▶", command=self.solve_and_display)
-        solve_btn.pack(side="right", padx=4)
-
-    def _build_setup_tab(self):
-        frame = ttk.Frame(self.notebook, padding=10)
-        self.notebook.add(frame, text="1. Fluenty i akcje")
-
-        ttk.Label(
-            frame,
-            text="Zdefiniuj fluenty (zmienne stanu) i akcje uzywane w dziedzinie.",
-            font=("", 10, "italic"),
-        ).pack(anchor="w", pady=(0, 8))
-
-        cols = ttk.Frame(frame)
-        cols.pack(fill="both", expand=True)
-
-        # Lewa kolumna: fluenty
-        left = ttk.LabelFrame(cols, text="Fluenty", padding=8)
-        left.pack(side="left", fill="both", expand=True, padx=(0, 4))
-
-        self.fluents_listbox = tk.Listbox(left, height=15)
-        self.fluents_listbox.pack(fill="both", expand=True, pady=(0, 4))
-
-        f_entry = ttk.Frame(left)
-        f_entry.pack(fill="x")
-        self.fluent_entry = ttk.Entry(f_entry)
-        self.fluent_entry.pack(side="left", fill="x", expand=True, padx=(0, 4))
-        self.fluent_entry.bind("<Return>", lambda e: self.add_fluent())
-        ttk.Button(f_entry, text="Dodaj", command=self.add_fluent).pack(side="left")
-        ttk.Button(left, text="Usun zaznaczony", command=self.del_fluent).pack(
-            fill="x", pady=(4, 0)
-        )
-
-        # Prawa kolumna: akcje
-        right = ttk.LabelFrame(cols, text="Akcje", padding=8)
-        right.pack(side="left", fill="both", expand=True, padx=(4, 0))
-
-        self.actions_listbox = tk.Listbox(right, height=15)
-        self.actions_listbox.pack(fill="both", expand=True, pady=(0, 4))
-
-        a_entry = ttk.Frame(right)
-        a_entry.pack(fill="x")
-        self.action_entry = ttk.Entry(a_entry)
-        self.action_entry.pack(side="left", fill="x", expand=True, padx=(0, 4))
-        self.action_entry.bind("<Return>", lambda e: self.add_action())
-        ttk.Button(a_entry, text="Dodaj", command=self.add_action).pack(side="left")
-        ttk.Button(right, text="Usun zaznaczona", command=self.del_action).pack(
-            fill="x", pady=(4, 0)
-        )
-
-    def _build_domain_tab(self):
-        frame = ttk.Frame(self.notebook, padding=10)
-        self.notebook.add(frame, text="2. Dziedzina")
-
-        ttk.Label(
-            frame,
-            text="Dodaj instrukcje opisu dziedziny.",
-            font=("", 10, "italic"),
-        ).pack(anchor="w", pady=(0, 8))
-
-        btns = ttk.Frame(frame)
-        btns.pack(fill="x", pady=(0, 8))
-
-        domain_buttons = [
-            ("+ duration", self.add_duration),
-            ("+ causes", self.add_causes),
-            ("+ releases", self.add_releases),
-            ("+ triggers", self.add_triggers),
-            ("+ state trigger", self.add_state_trigger),
-            ("+ impossible if", self.add_impossible_if),
-            ("+ impossible at", self.add_impossible_at),
+        # ═══ MAIN CONTENT ═══
+        main = tk.Frame(self.root, bg=Theme.BG)
+        main.pack(fill='both', expand=True, padx=16, pady=12)
+        
+        # Left: Tabs + Content
+        left = tk.Frame(main, bg=Theme.BG)
+        left.pack(side='left', fill='both', expand=True, padx=(0, 8))
+        
+        tabs = [
+            ("Fluenty & Akcje", None),
+            ("Dziedzina", None),
+            ("Scenariusz", None),
+            ("Kwerendy", None),
         ]
-        for text, cmd in domain_buttons:
-            ttk.Button(btns, text=text, command=cmd).pack(side="left", padx=2)
+        
+        self._tab_bar = TabBar(left, tabs, command=self._on_tab_change)
+        self._tab_bar.pack(fill='x')
+        
+        self._content = ContentPanel(left)
+        self._content.pack(fill='both', expand=True, pady=(8, 0))
+        
+        self._build_tab_setup()
+        self._build_tab_domain()
+        self._build_tab_scenario()
+        self._build_tab_queries()
+        
+        # Right: Results
+        right = tk.Frame(main, bg=Theme.BG, width=420)
+        right.pack(side='right', fill='both', padx=(8, 0))
+        right.pack_propagate(False)
+        
+        self._build_results_panel(right)
 
-        # Lista instrukcji
-        ttk.Label(frame, text="Aktualne instrukcje dziedziny:").pack(
-            anchor="w", pady=(8, 2)
-        )
-        self.domain_listbox = tk.Listbox(frame, height=15, font=("Courier", 10))
-        self.domain_listbox.pack(fill="both", expand=True)
-        ttk.Button(frame, text="Usun zaznaczona", command=self.del_domain_item).pack(
-            anchor="w", pady=(4, 0)
-        )
+    def _on_tab_change(self, idx):
+        self._content.show(idx)
 
-    def _build_scenario_tab(self):
-        frame = ttk.Frame(self.notebook, padding=10)
-        self.notebook.add(frame, text="3. Scenariusz")
+    # ═══════════════════════════════════════════════════════════
+    # TAB 1: FLUENTS & ACTIONS
+    # ═══════════════════════════════════════════════════════════
 
-        ttk.Label(
-            frame,
-            text="Obserwacje (OBS) i deklaracje akcji (ACS).",
-            font=("", 10, "italic"),
-        ).pack(anchor="w", pady=(0, 8))
+    def _build_tab_setup(self):
+        frame = tk.Frame(self._content, bg=Theme.BG)
+        self._content.add_frame(frame)
+        
+        cols = tk.Frame(frame, bg=Theme.BG)
+        cols.pack(fill='both', expand=True, pady=8)
+        
+        # Fluents card
+        left_card = tk.Frame(cols, bg=Theme.SURFACE, highlightthickness=1,
+                            highlightbackground=Theme.BORDER)
+        left_card.pack(side='left', fill='both', expand=True, padx=(0, 6))
+        
+        hdr = tk.Frame(left_card, bg=Theme.SURFACE)
+        hdr.pack(fill='x', padx=12, pady=(12, 8))
+        tk.Label(hdr, text="📝 Fluenty", fg=Theme.FG, bg=Theme.SURFACE,
+                font=(Theme.FONT_FAMILY, 11, 'bold')).pack(side='left')
+        
+        self.fluents_list = ModernListbox(left_card, height=12)
+        self.fluents_list.pack(fill='both', expand=True, padx=12, pady=(0, 8))
+        
+        entry_row = tk.Frame(left_card, bg=Theme.SURFACE)
+        entry_row.pack(fill='x', padx=12, pady=(0, 8))
+        self.fluent_entry = ModernEntry(entry_row, placeholder="Nazwa fluentu...", width=18)
+        self.fluent_entry.pack(side='left', fill='x', expand=True, padx=(0, 6))
+        self.fluent_entry.bind_key('<Return>', lambda e: self.add_fluent())
+        ModernButton(entry_row, text="+ Dodaj", command=self.add_fluent, width=80, height=30,
+                    font_size=9, radius=6).pack(side='left')
+        
+        del_row = tk.Frame(left_card, bg=Theme.SURFACE)
+        del_row.pack(fill='x', padx=12, pady=(0, 12))
+        ModernButton(del_row, text="Usuń", command=self.del_fluent, width=70, height=28,
+                    bg=Theme.ERROR, hover_bg='#fca5a5', font_size=9, radius=6).pack(side='left')
+        
+        # Actions card
+        right_card = tk.Frame(cols, bg=Theme.SURFACE, highlightthickness=1,
+                             highlightbackground=Theme.BORDER)
+        right_card.pack(side='left', fill='both', expand=True, padx=(6, 0))
+        
+        hdr2 = tk.Frame(right_card, bg=Theme.SURFACE)
+        hdr2.pack(fill='x', padx=12, pady=(12, 8))
+        tk.Label(hdr2, text="⚡ Akcje", fg=Theme.FG, bg=Theme.SURFACE,
+                font=(Theme.FONT_FAMILY, 11, 'bold')).pack(side='left')
+        
+        self.actions_list = ModernListbox(right_card, height=12)
+        self.actions_list.pack(fill='both', expand=True, padx=12, pady=(0, 8))
+        
+        entry_row2 = tk.Frame(right_card, bg=Theme.SURFACE)
+        entry_row2.pack(fill='x', padx=12, pady=(0, 8))
+        self.action_entry = ModernEntry(entry_row2, placeholder="Nazwa akcji...", width=18)
+        self.action_entry.pack(side='left', fill='x', expand=True, padx=(0, 6))
+        self.action_entry.bind_key('<Return>', lambda e: self.add_action())
+        ModernButton(entry_row2, text="+ Dodaj", command=self.add_action, width=80, height=30,
+                    font_size=9, radius=6).pack(side='left')
+        
+        del_row2 = tk.Frame(right_card, bg=Theme.SURFACE)
+        del_row2.pack(fill='x', padx=12, pady=(0, 12))
+        ModernButton(del_row2, text="Usuń", command=self.del_action, width=70, height=28,
+                    bg=Theme.ERROR, hover_bg='#fca5a5', font_size=9, radius=6).pack(side='left')
 
-        cols = ttk.Frame(frame)
-        cols.pack(fill="both", expand=True)
+    # ═══════════════════════════════════════════════════════════
+    # TAB 2: DOMAIN
+    # ═══════════════════════════════════════════════════════════
 
-        # OBS
-        left = ttk.LabelFrame(cols, text="OBS — obserwacje", padding=8)
-        left.pack(side="left", fill="both", expand=True, padx=(0, 4))
+    def _build_tab_domain(self):
+        frame = tk.Frame(self._content, bg=Theme.BG)
+        self._content.add_frame(frame)
+        
+        # Buttons row
+        btns = tk.Frame(frame, bg=Theme.BG)
+        btns.pack(fill='x', pady=(8, 10))
+        
+        domain_btns = [
+            ("⏱ Duration", self.add_duration),
+            ("→ Causes", self.add_causes),
+            ("🔓 Releases", self.add_releases),
+            ("🔗 Triggers", self.add_triggers),
+            ("🎯 State", self.add_state_trigger),
+            ("🚫 Imp. If", self.add_impossible_if),
+            ("⛔ Imp. At", self.add_impossible_at),
+        ]
+        for text, cmd in domain_btns:
+            ModernButton(btns, text=text, command=cmd, width=90, height=30,
+                        font_size=8, radius=6, bg=Theme.SURFACE, hover_bg=Theme.SURFACE_HOVER,
+                        fg=Theme.FG_MUTED, style='outline').pack(side='left', padx=2)
+        
+        # List card
+        card = tk.Frame(frame, bg=Theme.SURFACE, highlightthickness=1,
+                       highlightbackground=Theme.BORDER)
+        card.pack(fill='both', expand=True)
+        
+        tk.Label(card, text="📋 Instrukcje dziedziny", fg=Theme.FG_MUTED, bg=Theme.SURFACE,
+                font=(Theme.FONT_FAMILY, 9)).pack(anchor='w', padx=12, pady=(10, 4))
+        
+        self.domain_list = ModernListbox(card, height=14)
+        self.domain_list.pack(fill='both', expand=True, padx=12, pady=(0, 8))
+        
+        ModernButton(card, text="🗑 Usuń", command=self.del_domain_item, width=80, height=28,
+                    bg=Theme.ERROR, hover_bg='#fca5a5', font_size=9, radius=6
+                    ).pack(anchor='w', padx=12, pady=(0, 12))
 
-        self.obs_listbox = tk.Listbox(left, height=12, font=("Courier", 10))
-        self.obs_listbox.pack(fill="both", expand=True, pady=(0, 4))
-        obs_btns = ttk.Frame(left)
-        obs_btns.pack(fill="x")
-        ttk.Button(obs_btns, text="+ Obserwacja", command=self.add_obs).pack(side="left")
-        ttk.Button(obs_btns, text="Usun zaznaczona", command=self.del_obs).pack(
-            side="left", padx=4
-        )
+    # ═══════════════════════════════════════════════════════════
+    # TAB 3: SCENARIO
+    # ═══════════════════════════════════════════════════════════
 
-        # ACS
-        right = ttk.LabelFrame(cols, text="ACS — deklaracje akcji", padding=8)
-        right.pack(side="left", fill="both", expand=True, padx=(4, 0))
+    def _build_tab_scenario(self):
+        frame = tk.Frame(self._content, bg=Theme.BG)
+        self._content.add_frame(frame)
+        
+        cols = tk.Frame(frame, bg=Theme.BG)
+        cols.pack(fill='both', expand=True, pady=8)
+        
+        # OBS card
+        left_card = tk.Frame(cols, bg=Theme.SURFACE, highlightthickness=1,
+                            highlightbackground=Theme.BORDER)
+        left_card.pack(side='left', fill='both', expand=True, padx=(0, 6))
+        
+        hdr = tk.Frame(left_card, bg=Theme.SURFACE)
+        hdr.pack(fill='x', padx=12, pady=(12, 8))
+        tk.Label(hdr, text="👁 Obserwacje", fg=Theme.FG, bg=Theme.SURFACE,
+                font=(Theme.FONT_FAMILY, 11, 'bold')).pack(side='left')
+        
+        self.obs_list = ModernListbox(left_card, height=12)
+        self.obs_list.pack(fill='both', expand=True, padx=12, pady=(0, 8))
+        
+        obs_btns = tk.Frame(left_card, bg=Theme.SURFACE)
+        obs_btns.pack(fill='x', padx=12, pady=(0, 12))
+        ModernButton(obs_btns, text="+ Dodaj", command=self.add_obs, width=80, height=28,
+                    font_size=9, radius=6).pack(side='left', padx=(0, 4))
+        ModernButton(obs_btns, text="Usuń", command=self.del_obs, width=70, height=28,
+                    bg=Theme.ERROR, hover_bg='#fca5a5', font_size=9, radius=6).pack(side='left')
+        
+        # ACS card
+        right_card = tk.Frame(cols, bg=Theme.SURFACE, highlightthickness=1,
+                             highlightbackground=Theme.BORDER)
+        right_card.pack(side='left', fill='both', expand=True, padx=(6, 0))
+        
+        hdr2 = tk.Frame(right_card, bg=Theme.SURFACE)
+        hdr2.pack(fill='x', padx=12, pady=(12, 8))
+        tk.Label(hdr2, text="🎬 Deklaracje akcji", fg=Theme.FG, bg=Theme.SURFACE,
+                font=(Theme.FONT_FAMILY, 11, 'bold')).pack(side='left')
+        
+        self.acs_list = ModernListbox(right_card, height=12)
+        self.acs_list.pack(fill='both', expand=True, padx=12, pady=(0, 8))
+        
+        acs_btns = tk.Frame(right_card, bg=Theme.SURFACE)
+        acs_btns.pack(fill='x', padx=12, pady=(0, 12))
+        ModernButton(acs_btns, text="+ Dodaj", command=self.add_acs, width=80, height=28,
+                    font_size=9, radius=6).pack(side='left', padx=(0, 4))
+        ModernButton(acs_btns, text="Usuń", command=self.del_acs, width=70, height=28,
+                    bg=Theme.ERROR, hover_bg='#fca5a5', font_size=9, radius=6).pack(side='left')
 
-        self.acs_listbox = tk.Listbox(right, height=12, font=("Courier", 10))
-        self.acs_listbox.pack(fill="both", expand=True, pady=(0, 4))
-        acs_btns = ttk.Frame(right)
-        acs_btns.pack(fill="x")
-        ttk.Button(acs_btns, text="+ Deklaracja", command=self.add_acs).pack(side="left")
-        ttk.Button(acs_btns, text="Usun zaznaczona", command=self.del_acs).pack(
-            side="left", padx=4
-        )
+    # ═══════════════════════════════════════════════════════════
+    # TAB 4: QUERIES
+    # ═══════════════════════════════════════════════════════════
 
-    def _build_queries_tab(self):
-        frame = ttk.Frame(self.notebook, padding=10)
-        self.notebook.add(frame, text="4. Kwerendy")
+    def _build_tab_queries(self):
+        frame = tk.Frame(self._content, bg=Theme.BG)
+        self._content.add_frame(frame)
+        
+        btns = tk.Frame(frame, bg=Theme.BG)
+        btns.pack(fill='x', pady=(8, 10))
+        
+        query_btns = [
+            ("🤔 possibly Sc", self.add_q_possibly_sc),
+            ("⚙️ nec. perf.", lambda: self.add_q_performing("necessary")),
+            ("🤔 poss. perf.", lambda: self.add_q_performing("possibly")),
+            ("⚙️ nec. γ", lambda: self.add_q_condition("necessary")),
+            ("🤔 poss. γ", lambda: self.add_q_condition("possibly")),
+        ]
+        for text, cmd in query_btns:
+            ModernButton(btns, text=text, command=cmd, width=110, height=30,
+                        font_size=8, radius=6, bg=Theme.SURFACE, hover_bg=Theme.SURFACE_HOVER,
+                        fg=Theme.FG_MUTED, style='outline').pack(side='left', padx=2)
+        
+        card = tk.Frame(frame, bg=Theme.SURFACE, highlightthickness=1,
+                       highlightbackground=Theme.BORDER)
+        card.pack(fill='both', expand=True)
+        
+        tk.Label(card, text="📌 Lista kwerend", fg=Theme.FG_MUTED, bg=Theme.SURFACE,
+                font=(Theme.FONT_FAMILY, 9)).pack(anchor='w', padx=12, pady=(10, 4))
+        
+        self.queries_list = ModernListbox(card, height=14)
+        self.queries_list.pack(fill='both', expand=True, padx=12, pady=(0, 8))
+        
+        ModernButton(card, text="🗑 Usuń", command=self.del_query, width=80, height=28,
+                    bg=Theme.ERROR, hover_bg='#fca5a5', font_size=9, radius=6
+                    ).pack(anchor='w', padx=12, pady=(0, 12))
 
-        ttk.Label(
-            frame,
-            text="Dodaj kwerendy ktore beda wykonane po wygenerowaniu modeli.",
-            font=("", 10, "italic"),
-        ).pack(anchor="w", pady=(0, 8))
+    # ═══════════════════════════════════════════════════════════
+    # RESULTS PANEL
+    # ═══════════════════════════════════════════════════════════
 
-        btns = ttk.Frame(frame)
-        btns.pack(fill="x", pady=(0, 8))
+    def _build_results_panel(self, parent):
+        # Header
+        hdr = tk.Frame(parent, bg=Theme.BG)
+        hdr.pack(fill='x', pady=(0, 8))
+        tk.Label(hdr, text="📊 Wyniki", fg=Theme.FG, bg=Theme.BG,
+                font=(Theme.FONT_FAMILY, 12, 'bold')).pack(side='left')
+        
+        # Result card
+        card = tk.Frame(parent, bg=Theme.SURFACE, highlightthickness=1,
+                       highlightbackground=Theme.BORDER)
+        card.pack(fill='both', expand=True)
+        
+        self.results_text = tk.Text(card, font=(Theme.FONT_MONO, 9), wrap='none',
+                                   bg=Theme.SURFACE, fg=Theme.FG,
+                                   insertbackground=Theme.PRIMARY,
+                                   relief='flat', borderwidth=0, padx=12, pady=12,
+                                   highlightthickness=0)
+        
+        scrolly = tk.Scrollbar(card, orient='vertical', command=self.results_text.yview,
+                              bg=Theme.SURFACE, troughcolor=Theme.BG_SECONDARY,
+                              activebackground=Theme.FG_SUBTLE, width=8)
+        scrollx = tk.Scrollbar(card, orient='horizontal', command=self.results_text.xview,
+                              bg=Theme.SURFACE, troughcolor=Theme.BG_SECONDARY, width=8)
+        
+        self.results_text.config(yscrollcommand=scrolly.set, xscrollcommand=scrollx.set)
+        
+        scrolly.pack(side='right', fill='y', padx=(0, 2), pady=2)
+        scrollx.pack(side='bottom', fill='x', padx=2, pady=(0, 2))
+        self.results_text.pack(fill='both', expand=True)
 
-        ttk.Button(btns, text="+ possibly Sc", command=self.add_q_possibly_sc).pack(
-            side="left", padx=2
-        )
-        ttk.Button(
-            btns, text="+ necessary performing", command=lambda: self.add_q_performing("necessary")
-        ).pack(side="left", padx=2)
-        ttk.Button(
-            btns, text="+ possibly performing", command=lambda: self.add_q_performing("possibly")
-        ).pack(side="left", padx=2)
-        ttk.Button(
-            btns, text="+ necessary γ", command=lambda: self.add_q_condition("necessary")
-        ).pack(side="left", padx=2)
-        ttk.Button(
-            btns, text="+ possibly γ", command=lambda: self.add_q_condition("possibly")
-        ).pack(side="left", padx=2)
-
-        ttk.Label(frame, text="Lista kwerend:").pack(anchor="w", pady=(8, 2))
-        self.queries_listbox = tk.Listbox(frame, height=15, font=("Courier", 10))
-        self.queries_listbox.pack(fill="both", expand=True)
-        ttk.Button(frame, text="Usun zaznaczona", command=self.del_query).pack(
-            anchor="w", pady=(4, 0)
-        )
-
-    def _build_results_tab(self):
-        frame = ttk.Frame(self.notebook, padding=10)
-        self.notebook.add(frame, text="5. Wyniki")
-
-        ttk.Label(
-            frame,
-            text="Wynik dzialania: walidacja, modele, odpowiedzi na kwerendy.",
-            font=("", 10, "italic"),
-        ).pack(anchor="w", pady=(0, 8))
-
-        self.results_text = scrolledtext.ScrolledText(
-            frame, font=("Courier", 10), wrap="none"
-        )
-        self.results_text.pack(fill="both", expand=True)
-
-    # =============== Fluenty i akcje ===============
+    # ═══════════════════════════════════════════════════════════
+    # LOGIC: Fluents & Actions
+    # ═══════════════════════════════════════════════════════════
 
     def add_fluent(self):
         name = self.fluent_entry.get().strip()
         if not name:
             return
         if name in self.fluents:
-            messagebox.showerror("Blad", f"Fluent '{name}' juz istnieje.")
+            messagebox.showerror("Błąd", f"Fluent '{name}' już istnieje.")
             return
         self.fluents.append(name)
-        self.fluent_entry.delete(0, "end")
+        self.fluent_entry.delete(0, 'end')
         self._refresh_fluents()
 
     def del_fluent(self):
-        sel = self.fluents_listbox.curselection()
-        if not sel:
-            return
-        idx = sel[0]
-        del self.fluents[idx]
-        self._refresh_fluents()
+        sel = self.fluents_list.curselection()
+        if sel:
+            del self.fluents[sel[0]]
+            self._refresh_fluents()
 
     def add_action(self):
         name = self.action_entry.get().strip()
         if not name:
             return
         if name in self.actions:
-            messagebox.showerror("Blad", f"Akcja '{name}' juz istnieje.")
+            messagebox.showerror("Błąd", f"Akcja '{name}' już istnieje.")
             return
         self.actions.append(name)
-        self.action_entry.delete(0, "end")
+        self.action_entry.delete(0, 'end')
         self._refresh_actions()
 
     def del_action(self):
-        sel = self.actions_listbox.curselection()
-        if not sel:
-            return
-        idx = sel[0]
-        del self.actions[idx]
-        self._refresh_actions()
+        sel = self.actions_list.curselection()
+        if sel:
+            del self.actions[sel[0]]
+            self._refresh_actions()
 
     def _refresh_fluents(self):
-        self.fluents_listbox.delete(0, "end")
+        self.fluents_list.delete(0, 'end')
         for f in self.fluents:
-            self.fluents_listbox.insert("end", f)
+            self.fluents_list.insert('end', f)
 
     def _refresh_actions(self):
-        self.actions_listbox.delete(0, "end")
+        self.actions_list.delete(0, 'end')
         for a in self.actions:
-            self.actions_listbox.insert("end", a)
+            self.actions_list.insert('end', a)
 
-    # =============== Dziedzina ===============
+    # ═══════════════════════════════════════════════════════════
+    # LOGIC: Domain
+    # ═══════════════════════════════════════════════════════════
 
     def _ask_action(self, title):
-        """Mini-dialog wyboru akcji z dropdownu."""
         if not self.actions:
-            messagebox.showerror(
-                "Blad", "Brak zdefiniowanych akcji. Dodaj w zakladce 1."
-            )
+            messagebox.showerror("Błąd", "Brak akcji. Dodaj w zakładce 1.")
             return None
         return self._ask_choice(title, "Akcja:", self.actions)
 
     def _ask_fluent(self, title):
         if not self.fluents:
-            messagebox.showerror(
-                "Blad", "Brak zdefiniowanych fluentow. Dodaj w zakladce 1."
-            )
+            messagebox.showerror("Błąd", "Brak fluentów. Dodaj w zakładce 1.")
             return None
         return self._ask_choice(title, "Fluent:", self.fluents)
 
     def _ask_int(self, title, prompt, min_=0):
-        v = simpledialog.askinteger(title, prompt, parent=self.root, minvalue=min_)
-        return v
+        return simpledialog.askinteger(title, prompt, parent=self.root, minvalue=min_)
 
     def _ask_choice(self, title, prompt, choices):
-        """Mini-dialog z dropdownem wyboru z listy."""
         dlg = tk.Toplevel(self.root)
         dlg.title(title)
         dlg.transient(self.root)
         dlg.grab_set()
         dlg.resizable(False, False)
-        ttk.Label(dlg, text=prompt, padding=8).pack()
+        dlg.configure(bg=Theme.BG)
+        
+        tk.Label(dlg, text=prompt, fg=Theme.FG, bg=Theme.BG,
+                font=(Theme.FONT_FAMILY, 11, 'bold')).pack(padx=20, pady=(16, 8))
+        
         var = tk.StringVar(value=choices[0])
-        ttk.Combobox(
-            dlg, textvariable=var, values=choices, state="readonly", width=25
-        ).pack(padx=12, pady=4)
+        combo_frame = tk.Frame(dlg, bg=Theme.SURFACE, padx=8, pady=6)
+        combo_frame.pack(padx=20, pady=8)
+        ttk.Combobox(combo_frame, textvariable=var, values=choices, state="readonly",
+                    width=28, font=(Theme.FONT_FAMILY, 10)).pack()
+        
         result = [None]
-
         def ok():
             result[0] = var.get()
             dlg.destroy()
 
-        btns = ttk.Frame(dlg, padding=8)
-        btns.pack()
-        ttk.Button(btns, text="OK", command=ok).pack(side="left", padx=4)
-        ttk.Button(btns, text="Anuluj", command=dlg.destroy).pack(side="left", padx=4)
+        btn_frame = tk.Frame(dlg, bg=Theme.BG)
+        btn_frame.pack(padx=20, pady=14)
+        ModernButton(btn_frame, text="✓ OK", command=ok, width=90, height=32,
+                    font_size=9).pack(side='left', padx=4)
+        ModernButton(btn_frame, text="Anuluj", command=dlg.destroy, width=90, height=32,
+                    bg=Theme.SURFACE, hover_bg=Theme.SURFACE_HOVER, fg=Theme.FG_MUTED,
+                    font_size=9, style='outline').pack(side='left', padx=4)
         dlg.wait_window()
         return result[0]
 
     def add_duration(self):
-        action = self._ask_action("duration")
+        action = self._ask_action("Duration")
         if not action:
             return
-        n = self._ask_int("duration", f"Czas trwania akcji '{action}' (>= 1):", min_=1)
+        n = self._ask_int("Duration", f"Czas trwania '{action}' (>= 1):", min_=1)
         if n is None:
             return
         self.domain_items.append(DurationStatement(action, n))
         self._refresh_domain()
 
     def add_causes(self):
-        action = self._ask_action("causes — akcja")
+        action = self._ask_action("Causes")
         if not action:
             return
-        effect = LiteralDialog(
-            self.root, self.fluents, "causes — efekt (literal)"
-        ).result
+        effect = LiteralDialog(self.root, self.fluents, "Causes — efekt").result
         if effect is None:
             return
-        delay = self._ask_int("causes", "Opoznienie δ (>= 1):", min_=1)
+        delay = self._ask_int("Causes", "Opóźnienie (>= 1):", min_=1)
         if delay is None:
             return
-        # Opcjonalny warunek
-        add_cond = messagebox.askyesno(
-            "causes — warunek",
-            "Dodac warunek 'if π' do tej reguly?\n\n"
-            "Tak: zbuduj formule (AND literalow)\n"
-            "Nie: regula bezwarunkowa",
-        )
+        add_cond = messagebox.askyesno("Causes", "Dodać warunek 'if'?")
         condition = None
         if add_cond:
-            condition = FormulaDialog(
-                self.root, self.fluents, "causes — warunek π", required=True
-            ).result
+            condition = FormulaDialog(self.root, self.fluents, "Causes — warunek", required=True).result
             if condition is None:
                 return
         self.domain_items.append(CausesStatement(action, effect, delay, condition))
         self._refresh_domain()
 
     def add_releases(self):
-        action = self._ask_action("releases — akcja")
+        action = self._ask_action("Releases")
         if not action:
             return
-        fluent = self._ask_fluent("releases — fluent")
+        fluent = self._ask_fluent("Releases — fluent")
         if not fluent:
             return
-        a = self._ask_int("releases", "Poczatek przedzialu okluzji:", min_=0)
+        a = self._ask_int("Releases", "Początek przedziału:", min_=0)
         if a is None:
             return
-        b = self._ask_int("releases", "Koniec przedzialu okluzji:", min_=0)
+        b = self._ask_int("Releases", "Koniec przedziału:", min_=0)
         if b is None:
             return
         if b < a:
-            messagebox.showerror("Blad", "Koniec przedzialu musi byc >= poczatek.")
+            messagebox.showerror("Błąd", "Koniec >= początek.")
             return
         self.domain_items.append(ReleasesStatement(action, fluent, a, b))
         self._refresh_domain()
 
     def add_triggers(self):
-        cause = self._ask_action("triggers — akcja wyzwalajaca")
+        cause = self._ask_action("Triggers — wyzwalająca")
         if not cause:
             return
-        triggered = self._ask_action("triggers — akcja wyzwalana")
+        triggered = self._ask_action("Triggers — wyzwalana")
         if not triggered:
             return
-        delay = self._ask_int("triggers", "Opoznienie δ (>= 0):", min_=0)
+        delay = self._ask_int("Triggers", "Opóźnienie (>= 0):", min_=0)
         if delay is None:
             return
         self.domain_items.append(TriggersStatement(cause, triggered, delay))
         self._refresh_domain()
 
     def add_state_trigger(self):
-        condition = FormulaDialog(
-            self.root, self.fluents, "state trigger — warunek α", required=True
-        ).result
+        condition = FormulaDialog(self.root, self.fluents, "State Trigger — warunek", required=True).result
         if condition is None:
             return
-        action = self._ask_action("state trigger — akcja")
+        action = self._ask_action("State Trigger — akcja")
         if not action:
             return
         self.domain_items.append(StateTriggerStatement(condition, action))
         self._refresh_domain()
 
     def add_impossible_if(self):
-        action = self._ask_action("impossible if — akcja")
+        action = self._ask_action("Impossible If")
         if not action:
             return
-        condition = FormulaDialog(
-            self.root, self.fluents, "impossible if — warunek α", required=True
-        ).result
+        condition = FormulaDialog(self.root, self.fluents, "Impossible If — warunek", required=True).result
         if condition is None:
             return
         self.domain_items.append(ImpossibleIfStatement(action, condition))
         self._refresh_domain()
 
     def add_impossible_at(self):
-        action = self._ask_action("impossible at — akcja")
+        action = self._ask_action("Impossible At")
         if not action:
             return
-        t = self._ask_int("impossible at", "Punkt czasowy t:", min_=0)
+        t = self._ask_int("Impossible At", "Punkt czasowy t:", min_=0)
         if t is None:
             return
         self.domain_items.append(ImpossibleAtStatement(action, t))
         self._refresh_domain()
 
     def del_domain_item(self):
-        sel = self.domain_listbox.curselection()
-        if not sel:
-            return
-        idx = sel[0]
-        del self.domain_items[idx]
-        self._refresh_domain()
+        sel = self.domain_list.curselection()
+        if sel:
+            del self.domain_items[sel[0]]
+            self._refresh_domain()
 
     def _refresh_domain(self):
-        self.domain_listbox.delete(0, "end")
+        self.domain_list.delete(0, 'end')
         for s in self.domain_items:
-            self.domain_listbox.insert("end", self._format_domain_item(s))
+            self.domain_list.insert('end', self._format_domain_item(s))
 
     def _format_domain_item(self, s):
         if isinstance(s, DurationStatement):
@@ -650,7 +1022,7 @@ class DS1App:
             cond = f" if {format_formula(s.condition)}" if s.condition else ""
             return f"{s.action} causes {format_formula(s.effect)} after {s.delay}{cond}"
         if isinstance(s, ReleasesStatement):
-            return f"{s.action} releases {s.fluent} during [{s.interval_start},{s.interval_end}]"
+            return f"{s.action} releases {s.fluent} [{s.interval_start},{s.interval_end}]"
         if isinstance(s, TriggersStatement):
             return f"{s.cause_action} triggers {s.triggered_action} after {s.delay}"
         if isinstance(s, StateTriggerStatement):
@@ -661,102 +1033,95 @@ class DS1App:
             return f"impossible {s.action} at {s.time_point}"
         return repr(s)
 
-    # =============== Scenariusz ===============
+    # ═══════════════════════════════════════════════════════════
+    # LOGIC: Scenario
+    # ═══════════════════════════════════════════════════════════
 
     def add_obs(self):
-        formula = FormulaDialog(
-            self.root, self.fluents, "OBS — formula obserwacji", required=True
-        ).result
+        formula = FormulaDialog(self.root, self.fluents, "Obserwacja — formuła", required=True).result
         if formula is None:
             return
-        t = self._ask_int("OBS", "Chwila czasu t:", min_=0)
+        t = self._ask_int("Obserwacja", "Chwila t:", min_=0)
         if t is None:
             return
         self.observations.append(Observation(formula, t))
         self._refresh_scenario()
 
     def del_obs(self):
-        sel = self.obs_listbox.curselection()
-        if not sel:
-            return
-        del self.observations[sel[0]]
-        self._refresh_scenario()
+        sel = self.obs_list.curselection()
+        if sel:
+            del self.observations[sel[0]]
+            self._refresh_scenario()
 
     def add_acs(self):
-        action = self._ask_action("ACS — akcja")
+        action = self._ask_action("Deklaracja akcji")
         if not action:
             return
-        t = self._ask_int("ACS", "Chwila startu t:", min_=0)
+        t = self._ask_int("Deklaracja", "Chwila startu t:", min_=0)
         if t is None:
             return
         self.acs.append(ActionDeclaration(action, t))
         self._refresh_scenario()
 
     def del_acs(self):
-        sel = self.acs_listbox.curselection()
-        if not sel:
-            return
-        del self.acs[sel[0]]
-        self._refresh_scenario()
+        sel = self.acs_list.curselection()
+        if sel:
+            del self.acs[sel[0]]
+            self._refresh_scenario()
 
     def _refresh_scenario(self):
-        self.obs_listbox.delete(0, "end")
+        self.obs_list.delete(0, 'end')
         for obs in self.observations:
-            self.obs_listbox.insert(
-                "end", f"({format_formula(obs.formula)}, {obs.time})"
-            )
-        self.acs_listbox.delete(0, "end")
+            self.obs_list.insert('end', f"({format_formula(obs.formula)}, t={obs.time})")
+        self.acs_list.delete(0, 'end')
         for ad in self.acs:
-            self.acs_listbox.insert("end", f"({ad.action}, {ad.time})")
+            self.acs_list.insert('end', f"({ad.action}, t={ad.time})")
 
-    # =============== Kwerendy ===============
+    # ═══════════════════════════════════════════════════════════
+    # LOGIC: Queries
+    # ═══════════════════════════════════════════════════════════
 
     def add_q_possibly_sc(self):
         self.queries.append(("possibly Sc", QueryPossiblyScenario()))
         self._refresh_queries()
 
     def add_q_performing(self, mode):
-        action = self._ask_action(f"{mode} performing — akcja")
+        action = self._ask_action(f"{mode} performing")
         if not action:
             return
         t = self._ask_int(f"{mode} performing", "Chwila t:", min_=0)
         if t is None:
             return
-        label = f"{mode} performing {action} at {t} when Sc"
-        self.queries.append((label, QueryPerforming(mode, action, t)))
+        self.queries.append((f"{mode} performing {action} at {t}", QueryPerforming(mode, action, t)))
         self._refresh_queries()
 
     def add_q_condition(self, mode):
-        formula = FormulaDialog(
-            self.root, self.fluents, f"{mode} γ — formula", required=True
-        ).result
+        formula = FormulaDialog(self.root, self.fluents, f"{mode} γ", required=True).result
         if formula is None:
             return
         t = self._ask_int(f"{mode} γ", "Chwila t:", min_=0)
         if t is None:
             return
-        label = f"{mode} {format_formula(formula)} at {t} when Sc"
-        self.queries.append((label, QueryCondition(mode, formula, t)))
+        self.queries.append((f"{mode} {format_formula(formula)} at {t}", QueryCondition(mode, formula, t)))
         self._refresh_queries()
 
     def del_query(self):
-        sel = self.queries_listbox.curselection()
-        if not sel:
-            return
-        del self.queries[sel[0]]
-        self._refresh_queries()
+        sel = self.queries_list.curselection()
+        if sel:
+            del self.queries[sel[0]]
+            self._refresh_queries()
 
     def _refresh_queries(self):
-        self.queries_listbox.delete(0, "end")
+        self.queries_list.delete(0, 'end')
         for label, _ in self.queries:
-            self.queries_listbox.insert("end", label)
+            self.queries_list.insert('end', label)
 
-    # =============== Wyczysc / Wczytaj przyklad ===============
+    # ═══════════════════════════════════════════════════════════
+    # EXAMPLES & CLEAR
+    # ═══════════════════════════════════════════════════════════
 
     def clear_all(self):
-        if not messagebox.askyesno(
-            "Wyczyscic", "Usunac caly stan (fluenty, akcje, dziedzine, scenariusz, kwerendy)?"
-        ):
+        if not messagebox.askyesno("Wyczyść", "Usunąć cały stan?"):
             return
         self.fluents.clear()
         self.actions.clear()
@@ -775,33 +1140,19 @@ class DS1App:
         self._refresh_queries()
 
     def load_example(self, n):
-        if any([
-            self.fluents, self.actions, self.domain_items,
-            self.observations, self.acs, self.queries,
-        ]):
-            if not messagebox.askyesno(
-                "Wczytaj przyklad",
-                "Aktualny stan zostanie nadpisany. Kontynuowac?",
-            ):
+        if any([self.fluents, self.actions, self.domain_items, self.observations, self.acs, self.queries]):
+            if not messagebox.askyesno("Wczytaj", "Nadpisać stan?"):
                 return
-
         self.fluents.clear()
         self.actions.clear()
         self.domain_items.clear()
         self.observations.clear()
         self.acs.clear()
         self.queries.clear()
-
-        loaders = {
-            1: self._load_projektor,
-            2: self._load_serwerownia,
-            3: self._load_bledny,
-            4: self._load_smoke_wraca,
-            5: self._load_z5,
-        }
+        loaders = {1: self._load_projektor, 2: self._load_serwerownia,
+                   3: self._load_bledny, 4: self._load_smoke_wraca, 5: self._load_z5}
         loaders[n]()
         self._refresh_all()
-        self.notebook.select(1)  # przejdz na zakladke "Dziedzina"
 
     def _load_projektor(self):
         self.fluents = ["projector_on"]
@@ -815,14 +1166,10 @@ class DS1App:
         self.acs = [ActionDeclaration("press_power", 0)]
         self.queries = [
             ("possibly Sc", QueryPossiblyScenario()),
-            ("necessary performing press_power at 0 when Sc",
-             QueryPerforming("necessary", "press_power", 0)),
-            ("necessary performing press_power at 1 when Sc",
-             QueryPerforming("necessary", "press_power", 1)),
-            ("necessary projector_on at 2 when Sc",
-             QueryCondition("necessary", AtomicFormula("projector_on"), 2)),
-            ("possibly projector_on at 2 when Sc",
-             QueryCondition("possibly", AtomicFormula("projector_on"), 2)),
+            ("necessary performing press_power at 0", QueryPerforming("necessary", "press_power", 0)),
+            ("necessary performing press_power at 1", QueryPerforming("necessary", "press_power", 1)),
+            ("necessary projector_on at 2", QueryCondition("necessary", AtomicFormula("projector_on"), 2)),
+            ("possibly projector_on at 2", QueryCondition("possibly", AtomicFormula("projector_on"), 2)),
         ]
 
     def _load_serwerownia(self):
@@ -831,37 +1178,23 @@ class DS1App:
         self.domain_items = [
             DurationStatement("activate_alarm", 1),
             DurationStatement("start_ventilation", 2),
-            CausesStatement("activate_alarm", AtomicFormula("alarm_on"), 1,
-                            AtomicFormula("smoke")),
-            CausesStatement("start_ventilation", AtomicFormula("ventilation_on"), 2,
-                            AtomicFormula("alarm_on")),
+            CausesStatement("activate_alarm", AtomicFormula("alarm_on"), 1, AtomicFormula("smoke")),
+            CausesStatement("start_ventilation", AtomicFormula("ventilation_on"), 2, AtomicFormula("alarm_on")),
             ReleasesStatement("start_ventilation", "ventilation_on", 0, 2),
             TriggersStatement("activate_alarm", "start_ventilation", 1),
             StateTriggerStatement(AtomicFormula("smoke"), "activate_alarm"),
             ImpossibleIfStatement("activate_alarm", AtomicFormula("maintenance")),
         ]
-        obs = Conjunction(
-            Conjunction(
-                Conjunction(
-                    AtomicFormula("smoke"),
-                    Negation(AtomicFormula("maintenance")),
-                ),
-                Negation(AtomicFormula("alarm_on")),
-            ),
-            Negation(AtomicFormula("ventilation_on")),
-        )
+        obs = Conjunction(Conjunction(Conjunction(AtomicFormula("smoke"), Negation(AtomicFormula("maintenance"))),
+                                     Negation(AtomicFormula("alarm_on"))), Negation(AtomicFormula("ventilation_on")))
         self.observations = [Observation(obs, 0)]
         self.acs = []
         self.queries = [
             ("possibly Sc", QueryPossiblyScenario()),
-            ("necessary performing activate_alarm at 0 when Sc",
-             QueryPerforming("necessary", "activate_alarm", 0)),
-            ("necessary alarm_on at 1 when Sc",
-             QueryCondition("necessary", AtomicFormula("alarm_on"), 1)),
-            ("necessary performing start_ventilation at 2 when Sc",
-             QueryPerforming("necessary", "start_ventilation", 2)),
-            ("necessary ventilation_on at 4 when Sc",
-             QueryCondition("necessary", AtomicFormula("ventilation_on"), 4)),
+            ("necessary performing activate_alarm at 0", QueryPerforming("necessary", "activate_alarm", 0)),
+            ("necessary alarm_on at 1", QueryCondition("necessary", AtomicFormula("alarm_on"), 1)),
+            ("necessary performing start_ventilation at 2", QueryPerforming("necessary", "start_ventilation", 2)),
+            ("necessary ventilation_on at 4", QueryCondition("necessary", AtomicFormula("ventilation_on"), 4)),
         ]
 
     def _load_bledny(self):
@@ -870,8 +1203,7 @@ class DS1App:
         self.domain_items = [
             DurationStatement("repair", 3),
             DurationStatement("reboot", 2),
-            CausesStatement("reboot", AtomicFormula("system_on"), 2,
-                            Negation(AtomicFormula("broken"))),
+            CausesStatement("reboot", AtomicFormula("system_on"), 2, Negation(AtomicFormula("broken"))),
             ImpossibleAtStatement("reboot", 0),
         ]
         self.observations = [
@@ -890,34 +1222,22 @@ class DS1App:
         self.actions = ["activate_alarm"]
         self.domain_items = [
             DurationStatement("activate_alarm", 1),
-            CausesStatement("activate_alarm", AtomicFormula("alarm_on"), 1,
-                            AtomicFormula("smoke")),
+            CausesStatement("activate_alarm", AtomicFormula("alarm_on"), 1, AtomicFormula("smoke")),
             StateTriggerStatement(AtomicFormula("smoke"), "activate_alarm"),
         ]
         self.observations = [
-            Observation(
-                Conjunction(
-                    AtomicFormula("smoke"),
-                    Negation(AtomicFormula("alarm_on")),
-                ),
-                0,
-            ),
+            Observation(Conjunction(AtomicFormula("smoke"), Negation(AtomicFormula("alarm_on"))), 0),
             Observation(Negation(AtomicFormula("smoke")), 2),
             Observation(AtomicFormula("smoke"), 4),
         ]
         self.acs = []
         self.queries = [
             ("possibly Sc", QueryPossiblyScenario()),
-            ("necessary performing activate_alarm at 0 when Sc",
-             QueryPerforming("necessary", "activate_alarm", 0)),
-            ("possibly performing activate_alarm at 2 when Sc",
-             QueryPerforming("possibly", "activate_alarm", 2)),
-            ("necessary performing activate_alarm at 4 when Sc",
-             QueryPerforming("necessary", "activate_alarm", 4)),
-            ("necessary alarm_on at 1 when Sc",
-             QueryCondition("necessary", AtomicFormula("alarm_on"), 1)),
-            ("necessary alarm_on at 5 when Sc",
-             QueryCondition("necessary", AtomicFormula("alarm_on"), 5)),
+            ("necessary performing activate_alarm at 0", QueryPerforming("necessary", "activate_alarm", 0)),
+            ("possibly performing activate_alarm at 2", QueryPerforming("possibly", "activate_alarm", 2)),
+            ("necessary performing activate_alarm at 4", QueryPerforming("necessary", "activate_alarm", 4)),
+            ("necessary alarm_on at 1", QueryCondition("necessary", AtomicFormula("alarm_on"), 1)),
+            ("necessary alarm_on at 5", QueryCondition("necessary", AtomicFormula("alarm_on"), 5)),
         ]
 
     def _load_z5(self):
@@ -926,21 +1246,20 @@ class DS1App:
         self.domain_items = [
             DurationStatement("reboot", 2),
             DurationStatement("repair", 3),
-            CausesStatement("reboot", AtomicFormula("system_on"), 2,
-                            Negation(AtomicFormula("broken"))),
+            CausesStatement("reboot", AtomicFormula("system_on"), 2, Negation(AtomicFormula("broken"))),
             CausesStatement("repair", Negation(AtomicFormula("broken")), 3, None),
         ]
         self.observations = [Observation(AtomicFormula("broken"), 0)]
         self.acs = [ActionDeclaration("reboot", 0)]
         self.queries = [
             ("possibly Sc", QueryPossiblyScenario()),
-            ("possibly performing reboot at 0 when Sc",
-             QueryPerforming("possibly", "reboot", 0)),
-            ("possibly system_on at 2 when Sc",
-             QueryCondition("possibly", AtomicFormula("system_on"), 2)),
+            ("possibly performing reboot at 0", QueryPerforming("possibly", "reboot", 0)),
+            ("possibly system_on at 2", QueryCondition("possibly", AtomicFormula("system_on"), 2)),
         ]
 
-    # =============== Rozwiazywanie ===============
+    # ═══════════════════════════════════════════════════════════
+    # SOLVE
+    # ═══════════════════════════════════════════════════════════
 
     def build_domain(self):
         return Domain(
@@ -954,47 +1273,53 @@ class DS1App:
         )
 
     def build_scenario(self):
-        return Scenario(
-            observations=list(self.observations),
-            action_declarations=list(self.acs),
-        )
+        return Scenario(observations=list(self.observations), action_declarations=list(self.acs))
 
     def solve_and_display(self):
         domain = self.build_domain()
         scenario = self.build_scenario()
 
-        # Przekieruj stdout do bufora — uzywamy istniejacych helperow drukujacych
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
+            print("═" * 50)
+            print("  DS1 — WYNIKI ANALIZY")
+            print("═" * 50)
+            print()
             print_domain(domain)
             print_scenario(scenario)
 
             if not print_validation(domain, scenario):
-                print("\nScenariusz odrzucony — nie spelnia zalozen DS1.")
+                print("\n❌ Scenariusz odrzucony — nie spełnia założeń DS1.")
             else:
-                print("\nGenerowanie modeli...")
+                print("\n⏳ Generowanie modeli...")
                 models = solve(domain, scenario, extra_times=query_times(self.queries))
-                print(f"  Znaleziono {len(models)} model(i)")
-
+                print(f"✅ Znaleziono {len(models)} model(i)\n")
                 for i, m in enumerate(models):
-                    print(f"\n  Model {i + 1}:")
+                    print(f"{'─' * 40}")
+                    print(f"  Model {i + 1}:")
+                    print(f"{'─' * 40}")
                     print(format_model_table(m))
-
+                print()
                 print_queries(self.queries, models)
 
-        # Wyswietl w panelu wynikow
         self.results_text.delete("1.0", "end")
         self.results_text.insert("1.0", buf.getvalue())
-        # Przelacz na zakladke Wyniki
-        self.notebook.select(4)
 
 
-# ============================================================
-# Entry point
-# ============================================================
+# ═══════════════════════════════════════════════════════════════
+# ENTRY POINT
+# ═══════════════════════════════════════════════════════════════
 
 def main():
     root = tk.Tk()
+    
+    # Configure ttk styles for comboboxes
+    style = ttk.Style()
+    style.theme_use('clam')
+    style.configure('TCombobox', fieldbackground=Theme.SURFACE, background=Theme.SURFACE,
+                   foreground=Theme.FG, borderwidth=0)
+    style.map('TCombobox', fieldbackground=[('readonly', Theme.SURFACE)])
+    
     DS1App(root)
     root.mainloop()
 

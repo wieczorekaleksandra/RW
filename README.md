@@ -41,16 +41,23 @@ te same obiekty z formularza.
 
 ```
 src/
-├── models.py          # Struktury danych (Formula, Domain, Scenario, Model, ...)
-├── formula_eval.py    # Ewaluacja formuł logicznych H*(formula, t)
-├── validator.py       # Walidacja scenariusza wzgledem zalozen DS1
-├── solver.py          # Silnik generowania modeli
-├── query_engine.py    # Silnik odpowiadania na kwerendy
-└── main.py            # Wbudowane przyklady (projektor, serwerownia, bledny)
+├── models.py             # Struktury danych (Formula, Domain, Scenario, Model, ...)
+├── formula_eval.py       # Ewaluacja formuł logicznych H*(formula, t)
+├── validator.py          # Walidacja scenariusza wzgledem zalozen DS1
+├── solver.py             # Silnik generowania modeli
+├── query_engine.py       # Silnik odpowiadania na kwerendy
+├── main.py               # CLI dispatch — wywoluje przyklady
+└── examples/             # Wbudowane przyklady
+    ├── helpers.py        # Wspolne funkcje (solve_and_print, ...)
+    ├── projektor.py      # Przyklad 1 — niedeterminizm z releases
+    ├── serwerownia.py    # Przyklad 2 — state trigger + dynamic trigger
+    ├── bledny.py         # Przyklad 3 — walidator odrzuca scenariusz
+    ├── smoke_wraca.py    # Przyklad 4 — edge-triggered state trigger
+    └── precondition_z5.py # Przyklad 5 — Z5 blokuje start akcji
 tests/
-├── test_solver.py     # Testy silnika modeli (TODO)
-├── test_example1.py   # Testy — Przyklad 1 (projektor) (TODO)
-└── test_example2.py   # Testy — Przyklad 2 (serwerownia) (TODO)
+├── test_solver.py        # Testy silnika modeli (TODO — szkielety)
+├── test_example1.py      # Testy — Przyklad 1 (projektor) (TODO — szkielety)
+└── test_example2.py      # Testy — Przyklad 2 (serwerownia) (TODO — szkielety)
 ```
 
 ## Uruchomienie
@@ -59,6 +66,8 @@ tests/
 python3 -m src.main --example1    # Projektor (niedeterminizm z releases)
 python3 -m src.main --example2    # Serwerownia (state trigger + dynamic trigger)
 python3 -m src.main --example3    # Bledny scenariusz (walidator)
+python3 -m src.main --example4    # Smoke wraca (edge-triggered state trigger)
+python3 -m src.main --example5    # Z5 — precondition blokuje start akcji
 python3 -m src.main --examples    # Wszystkie powyzsze
 ```
 
@@ -77,16 +86,23 @@ Czyli `(a, 0, 2)` znaczy: `a` wykonuje się w `τ = 0, 1`, kończy się w `2`, e
 w `2`. Następna akcja może startować w `2`.
 
 Reguły szczegółowe:
-- `a causes α after δ if π`: efekt `α` zachodzi w `t0 + δ`, warunek `π` sprawdzany w `t0`
+- `a causes α after δ if π`: efekt `α` zachodzi w `t0 + δ`, warunek `π` sprawdzany
+  w `t0`. **Z5:** `π` jest również warunkiem początkowym akcji — akcja `a` nie
+  wystartuje w `t0` jeśli `π` nie zachodzi (semantyka koniunkcji dla wielu reguł
+  `causes` tej samej akcji).
 - `a triggers a' after δ`: akcja `a'` startuje w `end_time + δ` (przy `δ = 0` od razu)
-- `α causes a` (wyzwalacz stanowy): gdy `α` zachodzi w `t` i nie trwa żadna inna akcja,
-  startuje `a` w `t`
+- `α causes a` (wyzwalacz stanowy, **edge-triggered**): akcja `a` startuje w `t`
+  tylko gdy `α` przechodzi z False na True (zbocze narastające) i nie trwa żadna
+  inna akcja. Dla `t = 0` „stan przed scenariuszem" traktujemy jako False — jeśli
+  `α` jest True na starcie, wyzwalacz odpala. Zapobiega to cyklicznym odpalaniom
+  gdy warunek trwa stale True.
 - `impossible a if α` / `impossible a at t`: blokuje **start** akcji
 
-**Horyzont modelu** jest domknięty względem efektów, łańcuchów triggerów dynamicznych
-oraz czasów występujących w kwerendach (BFS przez graf wyzwoleń w
-[solver.py: _determine_time_horizon](src/solver.py#L34)). Wyzwalacze stanowe są
-trudne do statycznego przewidzenia, więc dla nich pozostaje krótki margines.
+**Horyzont modelu** ([solver.py:`_determine_time_horizon`](src/solver.py)) to
+konserwatywny upper bound domknięty względem: obserwacji, `impossible_at`, czasów
+z kwerend, końców akcji z ACS, wyzwalaczy stanowych (worst case — odpalą w
+aktualnym `max_t`), opóźnień `causes ... after δ`, oraz iteracyjnej propagacji
+dynamic triggers. Patrz [TODO.md — Horyzont W2 jako zapas](TODO.md#horyzont-w2--zapas).
 
 ## Język opisu akcji (API Pythona)
 

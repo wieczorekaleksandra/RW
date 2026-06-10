@@ -36,13 +36,25 @@ def solve(domain: Domain, scenario: Scenario, extra_times=()) -> list:
 
 def _determine_time_horizon(domain, scenario, extra_times=()) -> int:
     """
-    Oblicza horyzont czasowy domkniety wzgledem efektow, triggerow dynamicznych
-    i akcji wyzwolonych automatycznie.
+    Oblicza horyzont czasowy potrzebny do wygenerowania wszystkich
+    istotnych chwil w modelu.
 
-    Startujemy od max(czasy obserwacji, koncow akcji z ACS, impossible_at, extra_times).
-    Potem propagujemy przez graf triggerow: kazda akcja kanczaca sie w t moze odpalic
-    triggered_action o duration d po delay δ -> nowa akcja konczy sie w t+δ+d.
-    Petla dziala dopoki nie znajdziemy nowych konsekwencji.
+    Domkniety wzgledem:
+    1) bazowych punktow czasowych — obserwacje, impossible_at, extra_times
+       (czasy z kwerend);
+    2) koncow akcji z ACS;
+    3) wyzwalaczy stanowych (alfa causes a) — worst case: zakladamy ze
+       kazdy moze odpalic w aktualnym max_t i propagujemy jego konsekwencje;
+    4) wyzwalaczy dynamicznych (a triggers a' after delta) — iteracyjna
+       propagacja az do fixpoint lub limitu iteracji;
+    5) opoznien efektow (a causes alpha after delta) — efekt fire'uje w
+       start_t + delta, co moze wykraczac poza end_time akcji gdy delta
+       > duration.
+
+    Jest to KONSERWATYWNY upper bound — moze rozszerzyc horyzont za daleko
+    gdy wyzwalacz stanowy fizycznie sie nie odpali (jego warunek nigdy
+    nie zachodzi). Gwarantuje jednak ze wszystkie rzeczywiste zdarzenia
+    zostana objete pętlą solvera.
 
     extra_times: dodatkowe punkty czasowe do uwzglednienia (np. z kwerend).
     """
@@ -55,26 +67,52 @@ def _determine_time_horizon(domain, scenario, extra_times=()) -> int:
     for t in extra_times:
         max_t = max(max_t, t)
 
-    # 2. Konce akcji z ACS — to sa "zrodla" propagacji triggerow.
-    #    Bedziemy domykac iteracyjnie: kazda nowo wyznaczona koncowka akcji
-    #    moze odpalic kolejny trigger.
-    action_end_times = []  # lista (action_name, end_time) do propagacji
+    # 2. Konce akcji z ACS — seed propagacji
+    seed = []  # lista (action_name, end_time) do propagacji
     for ad in scenario.action_declarations:
         dur = domain.get_duration(ad.action)
-        action_end_times.append((ad.action, ad.time + dur))
-        max_t = max(max_t, ad.time + dur)
+        end_t = ad.time + dur
+        seed.append((ad.action, end_t))
+        max_t = max(max_t, end_t)
 
-    # 3. Propagacja przez triggery dynamiczne (a triggers a' after δ).
-    #    Stosujemy "fixed-point" — limit iteracji zabezpiecza przed nieskonczonym
-    #    cyklem (gdy trigger jest cykliczny).
+    # 3. Wyzwalacze stanowe — worst case: kazdy moze odpalic w aktualnym
+    #    max_t (pozniej niz t=0 jest mozliwe gdy warunek staje sie True
+    #    dopiero pod koniec scenariusza wskutek dynamic effect).
+    for st in domain.state_triggers:
+        dur = domain.get_duration(st.action)
+        end_t = max_t + dur
+        seed.append((st.action, end_t))
+        max_t = end_t
+
+    # 4. Max opoznien causes dla kazdej akcji — efekt 'a causes alpha after
+    #    delta' fire'uje w start_t + delta, co moze wykraczac poza
+    #    end_time akcji gdy delta > duration.
+    causes_max_delay = {}
+    for c in domain.causes:
+        causes_max_delay[c.action] = max(
+            causes_max_delay.get(c.action, 0), c.delay
+        )
+
+    # 5. Propagacja iteracyjna przez dynamic triggers + uwzglednienie
+    #    opoznien causes. Limit iteracji to bezpiecznik przed teoretycznym
+    #    cyklem (w praktyce dynamic triggers DS1 nie tworzą cykli).
     MAX_ITERATIONS = 50
-    seen = set()  # (action, end_time) ktore juz przepropagowalismy
+    seen = set()
+    pending = list(seed)
     for _ in range(MAX_ITERATIONS):
         new_ends = []
-        for (action, end_t) in action_end_times:
+        for (action, end_t) in pending:
             if (action, end_t) in seen:
                 continue
             seen.add((action, end_t))
+
+            # Causes effect time = start_t + delay
+            d_max = causes_max_delay.get(action, 0)
+            dur = domain.get_duration(action)
+            start_t = end_t - dur
+            max_t = max(max_t, start_t + d_max)
+
+            # Dynamic triggers
             for tr in domain.triggers:
                 if tr.cause_action == action:
                     triggered_start = end_t + tr.delay
@@ -84,12 +122,7 @@ def _determine_time_horizon(domain, scenario, extra_times=()) -> int:
                     max_t = max(max_t, triggered_end)
         if not new_ends:
             break
-        action_end_times = new_ends
-
-    # 4. Maly margines (na efekty causes...after δ ktore moga wykraczac poza
-    #    koniec akcji w przyszlosci). Celowo nie dodajemy duzego buforu, zeby
-    #    cykliczne wyzwalacze stanowe nie napompowaly modelu.
-    max_t += 1
+        pending = new_ends
 
     return max_t
 
@@ -233,55 +266,69 @@ def _step(domain, scenario, state, all_fluents, t):
     #    i waliduj impossible/sekwencyjnosc
     valid_states = []
     for s in states_after_fluents:
-        _apply_state_triggers(domain, s, all_fluents, t)
+        _apply_state_triggers(domain, s, t)
         _apply_dynamic_triggers(domain, s, t)
 
         if not _check_sequentiality(s['executions']):
             continue
         if not _check_impossible(domain, s['executions'], s['history'], t):
             continue
+        if not _check_action_preconditions(domain, s['executions'], s['history'], t):
+            continue
         valid_states.append(s)
 
     return valid_states
 
 
-def _apply_state_triggers(domain, state, all_fluents, t):
-    """Sprawdza wyzwalacze stanowe i dodaje akcje do E."""
+def _apply_state_triggers(domain, state, t):
+    """Sprawdza wyzwalacze stanowe i dodaje akcje do E.
+
+    Semantyka EDGE-TRIGGERED (zbocze narastajace): wyzwalacz stanowy
+    'alfa causes a' strzela tylko wtedy, gdy warunek alfa przechodzi
+    z False na True. Dla t=0 traktujemy stan "przed scenariuszem" jako
+    brak — jesli warunek jest True na starcie, liczy sie to jako zbocze
+    i wyzwalacz strzela.
+
+    Zapobiega to cyklicznym odpaleniom gdy warunek jest stale True
+    (np. smoke nigdy nie ganie -> alarm aktywuje sie raz, nie w kolko).
+    """
     history = state['history']
     executions = state['executions']
 
-    # Sprawdz czy w chwili t juz trwa jakas akcja albo jest zaplanowana
-    # Akcje zajmuja interwaly i nie moga sie nakladac.
-    # Jesli trigger dodaje akcje w t, to ta akcja trwa [t, t+dur).
-    # Sprawdzamy czy [t, t+dur) naklada sie z jakakolwiek istniejaca.
-    # Uproszczenie: nie dodajemy akcji jesli cokolwiek trwa lub startuje w t
-    # (start_time <= t < end_time) LUB jest zaplanowane na start w t
+    # Sprawdz czy w chwili t juz trwa jakas akcja albo jest zaplanowana.
+    # Akcje zajmuja interwaly i nie moga sie nakladac (Z2 - sekwencyjnosc).
     something_active = any(ex.start_time <= t < ex.end_time for ex in executions)
     something_starting = any(ex.start_time == t for ex in executions)
-    # Tez nie dodajemy jesli dynamic trigger juz zaplanuje cos na t
     something_ending_and_triggering = any(ex.end_time == t for ex in executions)
     if something_active or something_starting or something_ending_and_triggering:
         return
 
     for st in domain.state_triggers:
         try:
-            if _safe_eval(st.condition, history, t):
-                # Sprawdz czy juz nie ma tej akcji w t
-                already = any(ex.action == st.action and ex.start_time == t for ex in executions)
-                if not already:
-                    # Sprawdz impossible
-                    blocked = False
-                    for imp in domain.impossible_if:
-                        if imp.action == st.action and _safe_eval(imp.condition, history, t):
-                            blocked = True
-                            break
-                    for imp in domain.impossible_at:
-                        if imp.action == st.action and imp.time_point == t:
-                            blocked = True
-                            break
-                    if not blocked:
-                        dur = domain.get_duration(st.action)
-                        executions.append(ActionExecution(st.action, t, t + dur))
+            cond_now = _safe_eval(st.condition, history, t)
+            if not cond_now:
+                continue
+            # Edge-triggered: pomin gdy warunek juz zachodzil w t-1
+            # (brak zbocza narastajacego). Dla t=0 nie ma poprzedniej chwili,
+            # wiec zawsze strzelamy gdy warunek zachodzi.
+            if t > 0 and _safe_eval(st.condition, history, t - 1):
+                continue
+            # Sprawdz czy juz nie ma tej akcji w t
+            already = any(ex.action == st.action and ex.start_time == t for ex in executions)
+            if not already:
+                # Sprawdz impossible
+                blocked = False
+                for imp in domain.impossible_if:
+                    if imp.action == st.action and _safe_eval(imp.condition, history, t):
+                        blocked = True
+                        break
+                for imp in domain.impossible_at:
+                    if imp.action == st.action and imp.time_point == t:
+                        blocked = True
+                        break
+                if not blocked:
+                    dur = domain.get_duration(st.action)
+                    executions.append(ActionExecution(st.action, t, t + dur))
         except KeyError:
             pass
 
@@ -342,6 +389,34 @@ def _check_impossible(domain, executions, history, t) -> bool:
                             return False
                     except KeyError:
                         pass
+    return True
+
+
+def _check_action_preconditions(domain, executions, history, t) -> bool:
+    """
+    Z5: Sprawdza warunki poczatkowe akcji startujacych w chwili t.
+
+    Kazda regula 'a causes alpha after delta if pi' implikuje, ze pi
+    jest warunkiem poczatkowym (precondition) akcji a — akcja moze sie
+    rozpoczac tylko gdy pi zachodzi w jej start_time. Stosujemy semantyke
+    KONIUNKCJI: dla akcji a z kilkoma regulami causes, WSZYSTKIE pi musza
+    byc spelnione (reguly bez warunku nie naladaja nic).
+
+    Brak danych historycznych dla fluentu w pi traktujemy jako "warunek
+    nie spelniony" — wymagamy zeby precondition byl udowodniony True.
+
+    Zwraca False jesli jakakolwiek precondition nie zachodzi -> model
+    niepoprawny.
+    """
+    for ex in executions:
+        if ex.start_time == t:
+            for c in domain.causes:
+                if c.action == ex.action and c.condition is not None:
+                    try:
+                        if not evaluate(c.condition, history, t):
+                            return False
+                    except KeyError:
+                        return False
     return True
 
 

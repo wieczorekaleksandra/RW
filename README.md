@@ -46,7 +46,8 @@ src/
 ├── validator.py          # Walidacja scenariusza wzgledem zalozen DS1
 ├── solver.py             # Silnik generowania modeli
 ├── query_engine.py       # Silnik odpowiadania na kwerendy
-├── main.py               # CLI dispatch — wywoluje przyklady
+├── gui.py                # Okienkowy interfejs tkinter (--gui)
+├── main.py               # CLI dispatch — wywoluje przyklady lub GUI
 └── examples/             # Wbudowane przyklady
     ├── helpers.py        # Wspolne funkcje (solve_and_print, ...)
     ├── projektor.py      # Przyklad 1 — niedeterminizm z releases
@@ -61,6 +62,21 @@ tests/
 ```
 
 ## Uruchomienie
+
+### GUI (zalecane)
+
+```bash
+python3 -m src.main --gui
+```
+
+Otwiera okno tkinter z 5 zakładkami (Fluenty i akcje, Dziedzina, Scenariusz,
+Kwerendy, Wyniki). Wszystkie instrukcje dodajesz przez przyciski + dialogi
+z dropdownami — nie ma parsera, nie trzeba wpisywać składni z palca.
+
+**Najszybszy test:** kliknij `#2 Serwerownia` w pasku górnym (wczyta cały
+przykład), przejdź na zakładkę `5. Wyniki`, kliknij `ROZWIAZ ▶`.
+
+### CLI — wbudowane przykłady
 
 ```bash
 python3 -m src.main --example1    # Projektor (niedeterminizm z releases)

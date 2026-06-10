@@ -17,6 +17,7 @@ def _print_usage():
     print("  python3 -m src.main --example4   # Smoke wraca (edge-triggered)")
     print("  python3 -m src.main --example5   # Z5 precondition blokuje start")
     print("  python3 -m src.main --examples   # Wszystkie powyzsze")
+    print("  python3 -m src.main --gui        # Okienkowy interfejs (tkinter)")
 
 
 if __name__ == '__main__':
@@ -42,6 +43,9 @@ if __name__ == '__main__':
         run_example3()
         run_example4()
         run_example5()
+    elif arg == '--gui':
+        from src.gui import main as gui_main
+        gui_main()
     else:
         _print_usage()
         sys.exit(1)

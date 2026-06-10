@@ -55,8 +55,8 @@ class Theme:
     INFO = '#60a5fa'
     
     # Text
-    FG = '#e6edf3'
-    FG_MUTED = '#8b949e'
+    FG = '#ffffff'
+    FG_MUTED = '#ffffff'
     FG_SUBTLE = '#484f58'
     
     # Border
@@ -66,6 +66,7 @@ class Theme:
     # Fonts
     FONT_FAMILY = 'Segoe UI'
     FONT_MONO = 'Cascadia Code'
+    FONT_SCALE = 1.35
     
     # Sizing
     RADIUS = 12
@@ -82,7 +83,7 @@ class ModernButton(tk.Canvas):
     
     def __init__(self, parent, text="", command=None, width=120, height=36,
                  bg=Theme.PRIMARY, hover_bg=Theme.PRIMARY_HOVER, fg='#fff',
-                 font_size=10, radius=8, style='filled', **kwargs):
+                 font_size=13, radius=8, style='filled', **kwargs):
         super().__init__(parent, width=width, height=height, 
                         bg=parent.cget('bg') if hasattr(parent, 'cget') else Theme.BG,
                         highlightthickness=0, **kwargs)
@@ -129,9 +130,7 @@ class ModernButton(tk.Canvas):
                           width=1 if outline else 0)
         
         # Text
-        text_color = self._fg if self._style == 'filled' else self._bg
-        if self._style == 'ghost':
-            text_color = self._fg
+        text_color = self._fg
         offset = 1 if self._pressed else 0
         self.create_text(w//2, h//2 + offset, text=self._text, fill=text_color,
                         font=self._font)
@@ -179,7 +178,7 @@ class ModernEntry(tk.Frame):
         self._inner.pack(fill='x')
         
         self._entry = tk.Entry(self._inner, bg=Theme.SURFACE, fg=Theme.FG,
-                              insertbackground=Theme.PRIMARY, font=(Theme.FONT_FAMILY, 10),
+                              insertbackground=Theme.PRIMARY, font=(Theme.FONT_FAMILY, 13),
                               relief='flat', width=width, borderwidth=0)
         self._entry.pack(fill='x')
         
@@ -230,7 +229,7 @@ class ModernListbox(tk.Frame):
         super().__init__(parent, bg=Theme.SURFACE, highlightthickness=1,
                         highlightbackground=Theme.BORDER, highlightcolor=Theme.PRIMARY)
         
-        self._listbox = tk.Listbox(self, height=height, font=(Theme.FONT_MONO, 9),
+        self._listbox = tk.Listbox(self, height=height, font=(Theme.FONT_MONO, 12),
                                   bg=Theme.SURFACE, fg=Theme.FG,
                                   selectbackground=Theme.PRIMARY,
                                   selectforeground='#fff',
@@ -272,7 +271,7 @@ class TabBar(tk.Frame):
         for i, (text, _) in enumerate(tabs):
             lbl = tk.Label(self, text=text, bg=Theme.BG_SECONDARY, 
                           fg=Theme.FG if i == 0 else Theme.FG_MUTED,
-                          font=(Theme.FONT_FAMILY, 10, 'bold' if i == 0 else 'normal'),
+                          font=(Theme.FONT_FAMILY, 13, 'bold' if i == 0 else 'normal'),
                           padx=18, pady=11, cursor='hand2')
             lbl.pack(side='left')
             lbl.bind('<Button-1>', lambda e, idx=i: self._select(idx))
@@ -288,8 +287,8 @@ class TabBar(tk.Frame):
     def _select(self, idx):
         old = self._active
         self._active = idx
-        self._tab_labels[old].config(fg=Theme.FG_MUTED, font=(Theme.FONT_FAMILY, 10))
-        self._tab_labels[idx].config(fg=Theme.FG, font=(Theme.FONT_FAMILY, 10, 'bold'))
+        self._tab_labels[old].config(fg=Theme.FG_MUTED, font=(Theme.FONT_FAMILY, 13))
+        self._tab_labels[idx].config(fg=Theme.FG, font=(Theme.FONT_FAMILY, 13, 'bold'))
         self._update_underline()
         if self._command:
             self._command(idx)
@@ -360,25 +359,25 @@ class FormulaDialog(tk.Toplevel):
 
         if not fluents:
             lbl = tk.Label(self, text="⚠️ Brak fluentów.\nDodaj w zakładce 'Fluenty i akcje'.",
-                          fg=Theme.WARNING, bg=Theme.BG, font=(Theme.FONT_FAMILY, 11))
+                          fg=Theme.WARNING, bg=Theme.BG, font=(Theme.FONT_FAMILY, 13))
             lbl.pack(pady=30, padx=30)
             ModernButton(self, text="OK", command=self.cancel, width=80, height=32,
-                        font_size=9).pack(pady=10)
+                        font_size=11).pack(pady=10)
             self.wait_window()
             return
 
         # Title
         tk.Label(self, text="Wybierz wartość fluentów:", fg=Theme.FG, bg=Theme.BG,
-                font=(Theme.FONT_FAMILY, 12, 'bold')).pack(pady=(16, 12), padx=20, anchor='w')
+                font=(Theme.FONT_FAMILY, 14, 'bold')).pack(pady=(16, 12), padx=20, anchor='w')
 
         # Headers
         hdr = tk.Frame(self, bg=Theme.BG)
         hdr.pack(fill='x', padx=20)
         tk.Label(hdr, text="Fluent", fg=Theme.FG_MUTED, bg=Theme.BG, width=20, anchor='w',
-                font=(Theme.FONT_FAMILY, 9, 'bold')).pack(side='left')
+                font=(Theme.FONT_FAMILY, 11, 'bold')).pack(side='left')
         for t in ['True', 'False', 'Pomiń']:
             tk.Label(hdr, text=t, fg=Theme.FG_MUTED, bg=Theme.BG, width=8,
-                    font=(Theme.FONT_FAMILY, 9, 'bold')).pack(side='left')
+                    font=(Theme.FONT_FAMILY, 11, 'bold')).pack(side='left')
 
         tk.Frame(self, bg=Theme.BORDER, height=1).pack(fill='x', padx=20, pady=6)
 
@@ -389,7 +388,7 @@ class FormulaDialog(tk.Toplevel):
             var = tk.StringVar(value="skip")
             self.choices[f] = var
             tk.Label(row, text=f, fg=Theme.FG, bg=Theme.BG, width=20, anchor='w',
-                    font=(Theme.FONT_MONO, 10)).pack(side='left')
+                    font=(Theme.FONT_MONO, 12)).pack(side='left')
             for val in ['true', 'false', 'skip']:
                 tk.Radiobutton(row, variable=var, value=val, bg=Theme.BG,
                               fg=Theme.FG, selectcolor=Theme.PRIMARY_DIM,
@@ -400,10 +399,10 @@ class FormulaDialog(tk.Toplevel):
         btn_frame = tk.Frame(self, bg=Theme.BG)
         btn_frame.pack(fill='x', padx=20, pady=16)
         ModernButton(btn_frame, text="✓ Zatwierdź", command=self.ok, width=110, height=34,
-                    font_size=9).pack(side='right', padx=4)
+                    font_size=11).pack(side='right', padx=4)
         ModernButton(btn_frame, text="Anuluj", command=self.cancel, width=90, height=34,
                     bg=Theme.SURFACE, hover_bg=Theme.SURFACE_HOVER, fg=Theme.FG_MUTED,
-                    font_size=9, style='outline').pack(side='right', padx=4)
+                    font_size=11, style='outline').pack(side='right', padx=4)
 
         self.wait_window()
 
@@ -438,20 +437,20 @@ class LiteralDialog(tk.Toplevel):
 
         if not fluents:
             tk.Label(self, text="⚠️ Brak fluentów.", fg=Theme.WARNING, bg=Theme.BG,
-                    font=(Theme.FONT_FAMILY, 11)).pack(pady=30, padx=30)
+                    font=(Theme.FONT_FAMILY, 13)).pack(pady=30, padx=30)
             ModernButton(self, text="OK", command=self.cancel, width=80, height=32).pack(pady=10)
             self.wait_window()
             return
 
         tk.Label(self, text="Wybierz fluent:", fg=Theme.FG, bg=Theme.BG,
-                font=(Theme.FONT_FAMILY, 12, 'bold')).pack(pady=(16, 12), padx=20, anchor='w')
+                font=(Theme.FONT_FAMILY, 14, 'bold')).pack(pady=(16, 12), padx=20, anchor='w')
 
         # Combobox
         combo_frame = tk.Frame(self, bg=Theme.SURFACE, padx=8, pady=6)
         combo_frame.pack(fill='x', padx=20, pady=4)
         self.fluent_var = tk.StringVar(value=fluents[0])
         combo = ttk.Combobox(combo_frame, textvariable=self.fluent_var, values=fluents,
-                           state="readonly", width=30, font=(Theme.FONT_FAMILY, 10))
+                           state="readonly", width=30, font=(Theme.FONT_FAMILY, 12))
         combo.pack()
 
         # Negation
@@ -459,16 +458,16 @@ class LiteralDialog(tk.Toplevel):
         chk = tk.Checkbutton(self, text="  Negacja (~)", variable=self.negated_var,
                             bg=Theme.BG, fg=Theme.FG, selectcolor=Theme.PRIMARY_DIM,
                             activebackground=Theme.BG, activeforeground=Theme.FG,
-                            font=(Theme.FONT_FAMILY, 10), highlightthickness=0)
+                            font=(Theme.FONT_FAMILY, 12), highlightthickness=0)
         chk.pack(padx=20, pady=12, anchor='w')
 
         btn_frame = tk.Frame(self, bg=Theme.BG)
         btn_frame.pack(fill='x', padx=20, pady=14)
         ModernButton(btn_frame, text="✓ OK", command=self.ok, width=90, height=34,
-                    font_size=9).pack(side='right', padx=4)
+                    font_size=11).pack(side='right', padx=4)
         ModernButton(btn_frame, text="Anuluj", command=self.cancel, width=90, height=34,
                     bg=Theme.SURFACE, hover_bg=Theme.SURFACE_HOVER, fg=Theme.FG_MUTED,
-                    font_size=9, style='outline').pack(side='right', padx=4)
+                    font_size=11, style='outline').pack(side='right', padx=4)
 
         self.wait_window()
 
@@ -515,21 +514,21 @@ class DS1App:
         logo_frame.pack(side='left', padx=20, pady=10)
         
         tk.Label(logo_frame, text="◆", fg=Theme.PRIMARY, bg=Theme.BG_SECONDARY,
-                font=(Theme.FONT_FAMILY, 18)).pack(side='left', padx=(0, 8))
+                font=(Theme.FONT_FAMILY, 20)).pack(side='left', padx=(0, 8))
         tk.Label(logo_frame, text="DS1", fg=Theme.FG, bg=Theme.BG_SECONDARY,
-                font=(Theme.FONT_FAMILY, 14, 'bold')).pack(side='left')
+                font=(Theme.FONT_FAMILY, 16, 'bold')).pack(side='left')
         tk.Label(logo_frame, text="Scenariusze Działań", fg=Theme.FG_MUTED, 
-                bg=Theme.BG_SECONDARY, font=(Theme.FONT_FAMILY, 10)).pack(side='left', padx=(8, 0))
+                bg=Theme.BG_SECONDARY, font=(Theme.FONT_FAMILY, 12)).pack(side='left', padx=(8, 0))
         
         # Header buttons
         hdr_btns = tk.Frame(header, bg=Theme.BG_SECONDARY)
         hdr_btns.pack(side='right', padx=16, pady=10)
         
         ModernButton(hdr_btns, text="▶ Rozwiąż", command=self.solve_and_display,
-                    width=110, height=34, font_size=10, bg=Theme.SUCCESS,
+                    width=120, height=38, font_size=12, bg=Theme.SUCCESS,
                     hover_bg='#4ade80').pack(side='right', padx=6)
         ModernButton(hdr_btns, text="🗑 Wyczyść", command=self.clear_all,
-                    width=100, height=34, font_size=9, style='ghost',
+                    width=110, height=38, font_size=11, style='ghost',
                     bg=Theme.ERROR, hover_bg=Theme.SURFACE_HOVER, fg=Theme.FG_MUTED
                     ).pack(side='right', padx=4)
 
@@ -538,7 +537,7 @@ class DS1App:
         examples_bar.pack(fill='x', padx=20, pady=(8, 0))
         
         tk.Label(examples_bar, text="Przykłady:", fg=Theme.FG_MUTED, bg=Theme.BG,
-                font=(Theme.FONT_FAMILY, 9)).pack(side='left', padx=(0, 10))
+                font=(Theme.FONT_FAMILY, 11)).pack(side='left', padx=(0, 10))
         
         ex_data = [
             (1, "📺 Projektor"), (2, "🏢 Serwerownia"), (3, "🐞 Błędny"),
@@ -547,7 +546,7 @@ class DS1App:
         for n, name in ex_data:
             ModernButton(examples_bar, text=name, 
                         command=lambda nn=n: self.load_example(nn),
-                        width=100, height=28, font_size=9,
+                        width=112, height=32, font_size=11,
                         bg=Theme.SURFACE, hover_bg=Theme.SURFACE_HOVER,
                         fg=Theme.FG_MUTED, style='outline', radius=6
                         ).pack(side='left', padx=3)
@@ -607,7 +606,7 @@ class DS1App:
         hdr = tk.Frame(left_card, bg=Theme.SURFACE)
         hdr.pack(fill='x', padx=12, pady=(12, 8))
         tk.Label(hdr, text="📝 Fluenty", fg=Theme.FG, bg=Theme.SURFACE,
-                font=(Theme.FONT_FAMILY, 11, 'bold')).pack(side='left')
+                font=(Theme.FONT_FAMILY, 13, 'bold')).pack(side='left')
         
         self.fluents_list = ModernListbox(left_card, height=12)
         self.fluents_list.pack(fill='both', expand=True, padx=12, pady=(0, 8))
@@ -617,13 +616,13 @@ class DS1App:
         self.fluent_entry = ModernEntry(entry_row, placeholder="Nazwa fluentu...", width=18)
         self.fluent_entry.pack(side='left', fill='x', expand=True, padx=(0, 6))
         self.fluent_entry.bind_key('<Return>', lambda e: self.add_fluent())
-        ModernButton(entry_row, text="+ Dodaj", command=self.add_fluent, width=80, height=30,
-                    font_size=9, radius=6).pack(side='left')
+        ModernButton(entry_row, text="+ Dodaj", command=self.add_fluent, width=92, height=34,
+                    font_size=11, radius=6).pack(side='left')
         
         del_row = tk.Frame(left_card, bg=Theme.SURFACE)
         del_row.pack(fill='x', padx=12, pady=(0, 12))
-        ModernButton(del_row, text="Usuń", command=self.del_fluent, width=70, height=28,
-                    bg=Theme.ERROR, hover_bg='#fca5a5', font_size=9, radius=6).pack(side='left')
+        ModernButton(del_row, text="Usuń", command=self.del_fluent, width=82, height=32,
+                    bg=Theme.ERROR, hover_bg='#fca5a5', font_size=11, radius=6).pack(side='left')
         
         # Actions card
         right_card = tk.Frame(cols, bg=Theme.SURFACE, highlightthickness=1,
@@ -633,7 +632,7 @@ class DS1App:
         hdr2 = tk.Frame(right_card, bg=Theme.SURFACE)
         hdr2.pack(fill='x', padx=12, pady=(12, 8))
         tk.Label(hdr2, text="⚡ Akcje", fg=Theme.FG, bg=Theme.SURFACE,
-                font=(Theme.FONT_FAMILY, 11, 'bold')).pack(side='left')
+                font=(Theme.FONT_FAMILY, 13, 'bold')).pack(side='left')
         
         self.actions_list = ModernListbox(right_card, height=12)
         self.actions_list.pack(fill='both', expand=True, padx=12, pady=(0, 8))
@@ -643,13 +642,13 @@ class DS1App:
         self.action_entry = ModernEntry(entry_row2, placeholder="Nazwa akcji...", width=18)
         self.action_entry.pack(side='left', fill='x', expand=True, padx=(0, 6))
         self.action_entry.bind_key('<Return>', lambda e: self.add_action())
-        ModernButton(entry_row2, text="+ Dodaj", command=self.add_action, width=80, height=30,
-                    font_size=9, radius=6).pack(side='left')
+        ModernButton(entry_row2, text="+ Dodaj", command=self.add_action, width=92, height=34,
+                    font_size=11, radius=6).pack(side='left')
         
         del_row2 = tk.Frame(right_card, bg=Theme.SURFACE)
         del_row2.pack(fill='x', padx=12, pady=(0, 12))
-        ModernButton(del_row2, text="Usuń", command=self.del_action, width=70, height=28,
-                    bg=Theme.ERROR, hover_bg='#fca5a5', font_size=9, radius=6).pack(side='left')
+        ModernButton(del_row2, text="Usuń", command=self.del_action, width=82, height=32,
+                    bg=Theme.ERROR, hover_bg='#fca5a5', font_size=11, radius=6).pack(side='left')
 
     # ═══════════════════════════════════════════════════════════
     # TAB 2: DOMAIN
@@ -673,8 +672,8 @@ class DS1App:
             ("⛔ Imp. At", self.add_impossible_at),
         ]
         for text, cmd in domain_btns:
-            ModernButton(btns, text=text, command=cmd, width=90, height=30,
-                        font_size=8, radius=6, bg=Theme.SURFACE, hover_bg=Theme.SURFACE_HOVER,
+            ModernButton(btns, text=text, command=cmd, width=102, height=34,
+                        font_size=10, radius=6, bg=Theme.SURFACE, hover_bg=Theme.SURFACE_HOVER,
                         fg=Theme.FG_MUTED, style='outline').pack(side='left', padx=2)
         
         # List card
@@ -683,13 +682,13 @@ class DS1App:
         card.pack(fill='both', expand=True)
         
         tk.Label(card, text="📋 Instrukcje dziedziny", fg=Theme.FG_MUTED, bg=Theme.SURFACE,
-                font=(Theme.FONT_FAMILY, 9)).pack(anchor='w', padx=12, pady=(10, 4))
+                font=(Theme.FONT_FAMILY, 11)).pack(anchor='w', padx=12, pady=(10, 4))
         
         self.domain_list = ModernListbox(card, height=14)
         self.domain_list.pack(fill='both', expand=True, padx=12, pady=(0, 8))
         
-        ModernButton(card, text="🗑 Usuń", command=self.del_domain_item, width=80, height=28,
-                    bg=Theme.ERROR, hover_bg='#fca5a5', font_size=9, radius=6
+        ModernButton(card, text="🗑 Usuń", command=self.del_domain_item, width=92, height=32,
+                    bg=Theme.ERROR, hover_bg='#fca5a5', font_size=11, radius=6
                     ).pack(anchor='w', padx=12, pady=(0, 12))
 
     # ═══════════════════════════════════════════════════════════
@@ -711,17 +710,17 @@ class DS1App:
         hdr = tk.Frame(left_card, bg=Theme.SURFACE)
         hdr.pack(fill='x', padx=12, pady=(12, 8))
         tk.Label(hdr, text="👁 Obserwacje", fg=Theme.FG, bg=Theme.SURFACE,
-                font=(Theme.FONT_FAMILY, 11, 'bold')).pack(side='left')
+                font=(Theme.FONT_FAMILY, 13, 'bold')).pack(side='left')
         
         self.obs_list = ModernListbox(left_card, height=12)
         self.obs_list.pack(fill='both', expand=True, padx=12, pady=(0, 8))
         
         obs_btns = tk.Frame(left_card, bg=Theme.SURFACE)
         obs_btns.pack(fill='x', padx=12, pady=(0, 12))
-        ModernButton(obs_btns, text="+ Dodaj", command=self.add_obs, width=80, height=28,
-                    font_size=9, radius=6).pack(side='left', padx=(0, 4))
-        ModernButton(obs_btns, text="Usuń", command=self.del_obs, width=70, height=28,
-                    bg=Theme.ERROR, hover_bg='#fca5a5', font_size=9, radius=6).pack(side='left')
+        ModernButton(obs_btns, text="+ Dodaj", command=self.add_obs, width=92, height=32,
+                    font_size=11, radius=6).pack(side='left', padx=(0, 4))
+        ModernButton(obs_btns, text="Usuń", command=self.del_obs, width=82, height=32,
+                    bg=Theme.ERROR, hover_bg='#fca5a5', font_size=11, radius=6).pack(side='left')
         
         # ACS card
         right_card = tk.Frame(cols, bg=Theme.SURFACE, highlightthickness=1,
@@ -731,17 +730,17 @@ class DS1App:
         hdr2 = tk.Frame(right_card, bg=Theme.SURFACE)
         hdr2.pack(fill='x', padx=12, pady=(12, 8))
         tk.Label(hdr2, text="🎬 Deklaracje akcji", fg=Theme.FG, bg=Theme.SURFACE,
-                font=(Theme.FONT_FAMILY, 11, 'bold')).pack(side='left')
+                font=(Theme.FONT_FAMILY, 13, 'bold')).pack(side='left')
         
         self.acs_list = ModernListbox(right_card, height=12)
         self.acs_list.pack(fill='both', expand=True, padx=12, pady=(0, 8))
         
         acs_btns = tk.Frame(right_card, bg=Theme.SURFACE)
         acs_btns.pack(fill='x', padx=12, pady=(0, 12))
-        ModernButton(acs_btns, text="+ Dodaj", command=self.add_acs, width=80, height=28,
-                    font_size=9, radius=6).pack(side='left', padx=(0, 4))
-        ModernButton(acs_btns, text="Usuń", command=self.del_acs, width=70, height=28,
-                    bg=Theme.ERROR, hover_bg='#fca5a5', font_size=9, radius=6).pack(side='left')
+        ModernButton(acs_btns, text="+ Dodaj", command=self.add_acs, width=92, height=32,
+                    font_size=11, radius=6).pack(side='left', padx=(0, 4))
+        ModernButton(acs_btns, text="Usuń", command=self.del_acs, width=82, height=32,
+                    bg=Theme.ERROR, hover_bg='#fca5a5', font_size=11, radius=6).pack(side='left')
 
     # ═══════════════════════════════════════════════════════════
     # TAB 4: QUERIES
@@ -762,8 +761,8 @@ class DS1App:
             ("🤔 poss. γ", lambda: self.add_q_condition("possibly")),
         ]
         for text, cmd in query_btns:
-            ModernButton(btns, text=text, command=cmd, width=110, height=30,
-                        font_size=8, radius=6, bg=Theme.SURFACE, hover_bg=Theme.SURFACE_HOVER,
+            ModernButton(btns, text=text, command=cmd, width=124, height=34,
+                        font_size=10, radius=6, bg=Theme.SURFACE, hover_bg=Theme.SURFACE_HOVER,
                         fg=Theme.FG_MUTED, style='outline').pack(side='left', padx=2)
         
         card = tk.Frame(frame, bg=Theme.SURFACE, highlightthickness=1,
@@ -771,13 +770,13 @@ class DS1App:
         card.pack(fill='both', expand=True)
         
         tk.Label(card, text="📌 Lista kwerend", fg=Theme.FG_MUTED, bg=Theme.SURFACE,
-                font=(Theme.FONT_FAMILY, 9)).pack(anchor='w', padx=12, pady=(10, 4))
+                font=(Theme.FONT_FAMILY, 11)).pack(anchor='w', padx=12, pady=(10, 4))
         
         self.queries_list = ModernListbox(card, height=14)
         self.queries_list.pack(fill='both', expand=True, padx=12, pady=(0, 8))
         
-        ModernButton(card, text="🗑 Usuń", command=self.del_query, width=80, height=28,
-                    bg=Theme.ERROR, hover_bg='#fca5a5', font_size=9, radius=6
+        ModernButton(card, text="🗑 Usuń", command=self.del_query, width=92, height=32,
+                    bg=Theme.ERROR, hover_bg='#fca5a5', font_size=11, radius=6
                     ).pack(anchor='w', padx=12, pady=(0, 12))
 
     # ═══════════════════════════════════════════════════════════
@@ -789,14 +788,14 @@ class DS1App:
         hdr = tk.Frame(parent, bg=Theme.BG)
         hdr.pack(fill='x', pady=(0, 8))
         tk.Label(hdr, text="📊 Wyniki", fg=Theme.FG, bg=Theme.BG,
-                font=(Theme.FONT_FAMILY, 12, 'bold')).pack(side='left')
+                font=(Theme.FONT_FAMILY, 14, 'bold')).pack(side='left')
         
         # Result card
         card = tk.Frame(parent, bg=Theme.SURFACE, highlightthickness=1,
                        highlightbackground=Theme.BORDER)
         card.pack(fill='both', expand=True)
         
-        self.results_text = tk.Text(card, font=(Theme.FONT_MONO, 9), wrap='none',
+        self.results_text = tk.Text(card, font=(Theme.FONT_MONO, 12), wrap='none',
                                    bg=Theme.SURFACE, fg=Theme.FG,
                                    insertbackground=Theme.PRIMARY,
                                    relief='flat', borderwidth=0, padx=12, pady=12,
@@ -890,13 +889,13 @@ class DS1App:
         dlg.configure(bg=Theme.BG)
         
         tk.Label(dlg, text=prompt, fg=Theme.FG, bg=Theme.BG,
-                font=(Theme.FONT_FAMILY, 11, 'bold')).pack(padx=20, pady=(16, 8))
+                font=(Theme.FONT_FAMILY, 13, 'bold')).pack(padx=20, pady=(16, 8))
         
         var = tk.StringVar(value=choices[0])
         combo_frame = tk.Frame(dlg, bg=Theme.SURFACE, padx=8, pady=6)
         combo_frame.pack(padx=20, pady=8)
         ttk.Combobox(combo_frame, textvariable=var, values=choices, state="readonly",
-                    width=28, font=(Theme.FONT_FAMILY, 10)).pack()
+                    width=28, font=(Theme.FONT_FAMILY, 12)).pack()
         
         result = [None]
         def ok():
@@ -906,10 +905,10 @@ class DS1App:
         btn_frame = tk.Frame(dlg, bg=Theme.BG)
         btn_frame.pack(padx=20, pady=14)
         ModernButton(btn_frame, text="✓ OK", command=ok, width=90, height=32,
-                    font_size=9).pack(side='left', padx=4)
+                    font_size=11).pack(side='left', padx=4)
         ModernButton(btn_frame, text="Anuluj", command=dlg.destroy, width=90, height=32,
                     bg=Theme.SURFACE, hover_bg=Theme.SURFACE_HOVER, fg=Theme.FG_MUTED,
-                    font_size=9, style='outline').pack(side='left', padx=4)
+                    font_size=11, style='outline').pack(side='left', padx=4)
         dlg.wait_window()
         return result[0]
 
@@ -1312,13 +1311,55 @@ class DS1App:
 
 def main():
     root = tk.Tk()
+    current_scaling = float(root.tk.call('tk', 'scaling'))
+    root.tk.call('tk', 'scaling', current_scaling * Theme.FONT_SCALE)
+
+    default_font = tkfont.nametofont('TkDefaultFont')
+    default_font.configure(family=Theme.FONT_FAMILY, size=13)
+    text_font = tkfont.nametofont('TkTextFont')
+    text_font.configure(family=Theme.FONT_FAMILY, size=13)
+    menu_font = tkfont.nametofont('TkMenuFont')
+    menu_font.configure(family=Theme.FONT_FAMILY, size=13)
+    fixed_font = tkfont.nametofont('TkFixedFont')
+    fixed_font.configure(family=Theme.FONT_MONO, size=12)
+
+    root.option_add('*Foreground', Theme.FG)
+    root.option_add('*Label.Foreground', Theme.FG)
+    root.option_add('*Button.Foreground', Theme.FG)
+    root.option_add('*Checkbutton.Foreground', Theme.FG)
+    root.option_add('*Radiobutton.Foreground', Theme.FG)
+    root.option_add('*Entry.Foreground', Theme.FG)
+    root.option_add('*Text.Foreground', Theme.FG)
+    root.option_add('*Listbox.Foreground', Theme.FG)
+    root.option_add('*TCombobox*Listbox.foreground', Theme.FG)
+    root.option_add('*TCombobox*Listbox.background', Theme.SURFACE)
+    root.option_add('*TCombobox*Listbox.selectForeground', Theme.FG)
+    root.option_add('*TCombobox*Listbox.selectBackground', Theme.PRIMARY_DIM)
     
     # Configure ttk styles for comboboxes
     style = ttk.Style()
     style.theme_use('clam')
-    style.configure('TCombobox', fieldbackground=Theme.SURFACE, background=Theme.SURFACE,
-                   foreground=Theme.FG, borderwidth=0)
-    style.map('TCombobox', fieldbackground=[('readonly', Theme.SURFACE)])
+    style.configure(
+        'TCombobox',
+        fieldbackground=Theme.SURFACE,
+        background=Theme.SURFACE,
+        foreground=Theme.FG,
+        arrowcolor=Theme.FG,
+        bordercolor=Theme.BORDER,
+        lightcolor=Theme.BORDER,
+        darkcolor=Theme.BORDER,
+        selectforeground=Theme.FG,
+        selectbackground=Theme.PRIMARY_DIM,
+        borderwidth=0,
+    )
+    style.map(
+        'TCombobox',
+        fieldbackground=[('readonly', Theme.SURFACE)],
+        foreground=[('readonly', Theme.FG)],
+        selectforeground=[('readonly', Theme.FG)],
+        selectbackground=[('readonly', Theme.PRIMARY_DIM)],
+        arrowcolor=[('readonly', Theme.FG)],
+    )
     
     DS1App(root)
     root.mainloop()

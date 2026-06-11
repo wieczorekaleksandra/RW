@@ -22,10 +22,19 @@ from src.models import (
 from src.solver import solve
 from src.validator import validate
 from src.query_engine import execute_query
-from src.examples.helpers import (
+from src.printers import (
     format_formula, format_model_table,
     print_domain, print_scenario, print_validation, print_queries,
     query_times,
+)
+from src.parser import parse_file, derive_fluents_actions, ParseError
+from tkinter import filedialog
+import os
+
+# Sciezka do folderu z przykladami (relatywnie do tego pliku)
+EXAMPLES_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "examples",
 )
 
 
@@ -34,38 +43,38 @@ from src.examples.helpers import (
 # ═══════════════════════════════════════════════════════════════
 
 class Theme:
-    # Base
-    BG = '#0d1117'
-    BG_SECONDARY = '#161b22'
-    BG_TERTIARY = '#1c2128'
-    SURFACE = '#21262d'
-    SURFACE_HOVER = '#292e36'
-    
+    # Base — light theme
+    BG = '#ffffff'
+    BG_SECONDARY = '#f6f8fa'
+    BG_TERTIARY = '#eaeef2'
+    SURFACE = '#f0f3f6'
+    SURFACE_HOVER = '#e1e4e8'
+
     # Accent
     PRIMARY = '#8b5cf6'
     PRIMARY_HOVER = '#a78bfa'
     PRIMARY_DIM = '#6d28d9'
     PRIMARY_GLOW = '#8b5cf620'
-    
-    # Semantic
-    SUCCESS = '#34d399'
-    SUCCESS_DIM = '#065f46'
-    WARNING = '#fbbf24'
-    ERROR = '#f87171'
-    INFO = '#60a5fa'
-    
-    # Text
-    FG = '#ffffff'
-    FG_MUTED = '#ffffff'
-    FG_SUBTLE = '#484f58'
-    
+
+    # Semantic — przyciemnione na jasnym tle dla czytelnosci
+    SUCCESS = '#10b981'
+    SUCCESS_DIM = '#d1fae5'
+    WARNING = '#f59e0b'
+    ERROR = '#ef4444'
+    INFO = '#3b82f6'
+
+    # Text — odwrocone: ciemny na jasnym
+    FG = '#0d1117'
+    FG_MUTED = '#57606a'
+    FG_SUBTLE = '#8c959f'
+
     # Border
-    BORDER = '#30363d'
+    BORDER = '#d0d7de'
     BORDER_ACCENT = '#8b5cf640'
     
-    # Fonts
-    FONT_FAMILY = 'Segoe UI'
-    FONT_MONO = 'Cascadia Code'
+    # Fonts (FONT_MONO moze byc nadpisany przez _pick_mono_font na starcie)
+    FONT_FAMILY: str = 'Segoe UI'
+    FONT_MONO: str = 'Cascadia Code'
     FONT_SCALE = 1.35
     
     # Sizing
@@ -544,44 +553,52 @@ class DS1App:
             (4, "💨 Smoke"), (5, "⚙️ Z5"),
         ]
         for n, name in ex_data:
-            ModernButton(examples_bar, text=name, 
+            ModernButton(examples_bar, text=name,
                         command=lambda nn=n: self.load_example(nn),
                         width=112, height=32, font_size=11,
                         bg=Theme.SURFACE, hover_bg=Theme.SURFACE_HOVER,
                         fg=Theme.FG_MUTED, style='outline', radius=6
                         ).pack(side='left', padx=3)
 
+        # Przycisk "Inny przyklad..." — file picker
+        ModernButton(examples_bar, text="📂 Inny przyklad…",
+                     command=self.load_custom_example,
+                     width=160, height=32, font_size=11,
+                     bg=Theme.PRIMARY, hover_bg=Theme.PRIMARY_HOVER,
+                     fg='#ffffff', style='filled', radius=6
+                     ).pack(side='left', padx=(12, 3))
+
         # ═══ MAIN CONTENT ═══
         main = tk.Frame(self.root, bg=Theme.BG)
         main.pack(fill='both', expand=True, padx=16, pady=12)
-        
+
         # Left: Tabs + Content
         left = tk.Frame(main, bg=Theme.BG)
         left.pack(side='left', fill='both', expand=True, padx=(0, 8))
-        
+
         tabs = [
             ("Fluenty & Akcje", None),
             ("Dziedzina", None),
             ("Scenariusz", None),
             ("Kwerendy", None),
         ]
-        
+
         self._tab_bar = TabBar(left, tabs, command=self._on_tab_change)
         self._tab_bar.pack(fill='x')
-        
+
         self._content = ContentPanel(left)
         self._content.pack(fill='both', expand=True, pady=(8, 0))
-        
+
         self._build_tab_setup()
         self._build_tab_domain()
         self._build_tab_scenario()
         self._build_tab_queries()
-        
+
         # Right: Results
         right = tk.Frame(main, bg=Theme.BG, width=420)
         right.pack(side='right', fill='both', padx=(8, 0))
         right.pack_propagate(False)
-        
+
         self._build_results_panel(right)
 
     def _on_tab_change(self, idx):
@@ -929,7 +946,11 @@ class DS1App:
         effect = LiteralDialog(self.root, self.fluents, "Causes — efekt").result
         if effect is None:
             return
-        delay = self._ask_int("Causes", "Opóźnienie (>= 1):", min_=1)
+        delay = self._ask_int(
+            "Causes",
+            "Opóźnienie efektu (>= 0; 0 = natychmiastowy w start_time):",
+            min_=0,
+        )
         if delay is None:
             return
         add_cond = messagebox.askyesno("Causes", "Dodać warunek 'if'?")
@@ -1138,123 +1159,77 @@ class DS1App:
         self._refresh_scenario()
         self._refresh_queries()
 
+    # Mapowanie szybkich przyciskow #1..#5 -> plik w examples/
+    EXAMPLE_FILES = {
+        1: "projektor.txt",
+        2: "serwerownia.txt",
+        3: "bledny.txt",
+        4: "smoke_wraca.txt",
+        5: "precondition_z5.txt",
+    }
+
     def load_example(self, n):
-        if any([self.fluents, self.actions, self.domain_items, self.observations, self.acs, self.queries]):
+        """Wczytuje wbudowany przyklad #n z pliku examples/*.txt."""
+        filename = self.EXAMPLE_FILES.get(n)
+        if filename is None:
+            messagebox.showerror("Blad", f"Nieznany przyklad #{n}")
+            return
+        path = os.path.join(EXAMPLES_DIR, filename)
+        self._load_from_file(path)
+
+    def load_custom_example(self):
+        """Otwiera dialog wyboru pliku .txt i laduje go jako scenariusz."""
+        path = filedialog.askopenfilename(
+            title="Wybierz plik przykladu (.txt)",
+            initialdir=EXAMPLES_DIR if os.path.isdir(EXAMPLES_DIR) else ".",
+            filetypes=[("Pliki tekstowe DS1", "*.txt"), ("Wszystkie pliki", "*.*")],
+        )
+        if not path:
+            return
+        self._load_from_file(path)
+
+    def _load_from_file(self, path):
+        """Wczytuje scenariusz z pliku .txt i wypelnia stan aplikacji."""
+        if any([self.fluents, self.actions, self.domain_items,
+                self.observations, self.acs, self.queries]):
             if not messagebox.askyesno("Wczytaj", "Nadpisać stan?"):
                 return
-        self.fluents.clear()
-        self.actions.clear()
+
+        try:
+            domain, scenario, queries = parse_file(path)
+        except FileNotFoundError:
+            messagebox.showerror("Blad", f"Nie znaleziono pliku:\n{path}")
+            return
+        except ParseError as e:
+            messagebox.showerror(
+                "Blad parsowania",
+                f"Plik: {os.path.basename(path)}\n\n{e}",
+            )
+            return
+
+        fluents, actions = derive_fluents_actions(domain, scenario, queries)
+
+        # Wyczysc i wypelnij
+        self.fluents.clear(); self.fluents.extend(fluents)
+        self.actions.clear(); self.actions.extend(actions)
         self.domain_items.clear()
+        self.domain_items.extend(domain.durations)
+        self.domain_items.extend(domain.causes)
+        self.domain_items.extend(domain.releases)
+        self.domain_items.extend(domain.triggers)
+        self.domain_items.extend(domain.state_triggers)
+        self.domain_items.extend(domain.impossible_if)
+        self.domain_items.extend(domain.impossible_at)
         self.observations.clear()
+        self.observations.extend(scenario.observations)
         self.acs.clear()
+        self.acs.extend(scenario.action_declarations)
         self.queries.clear()
-        loaders = {1: self._load_projektor, 2: self._load_serwerownia,
-                   3: self._load_bledny, 4: self._load_smoke_wraca, 5: self._load_z5}
-        loaders[n]()
+        self.queries.extend(queries)
+
         self._refresh_all()
-
-    def _load_projektor(self):
-        self.fluents = ["projector_on"]
-        self.actions = ["press_power"]
-        self.domain_items = [
-            DurationStatement("press_power", 1),
-            ReleasesStatement("press_power", "projector_on", 0, 1),
-            ImpossibleIfStatement("press_power", AtomicFormula("projector_on")),
-        ]
-        self.observations = [Observation(Negation(AtomicFormula("projector_on")), 0)]
-        self.acs = [ActionDeclaration("press_power", 0)]
-        self.queries = [
-            ("possibly Sc", QueryPossiblyScenario()),
-            ("necessary performing press_power at 0", QueryPerforming("necessary", "press_power", 0)),
-            ("necessary performing press_power at 1", QueryPerforming("necessary", "press_power", 1)),
-            ("necessary projector_on at 2", QueryCondition("necessary", AtomicFormula("projector_on"), 2)),
-            ("possibly projector_on at 2", QueryCondition("possibly", AtomicFormula("projector_on"), 2)),
-        ]
-
-    def _load_serwerownia(self):
-        self.fluents = ["smoke", "maintenance", "alarm_on", "ventilation_on"]
-        self.actions = ["activate_alarm", "start_ventilation"]
-        self.domain_items = [
-            DurationStatement("activate_alarm", 1),
-            DurationStatement("start_ventilation", 2),
-            CausesStatement("activate_alarm", AtomicFormula("alarm_on"), 1, AtomicFormula("smoke")),
-            CausesStatement("start_ventilation", AtomicFormula("ventilation_on"), 2, AtomicFormula("alarm_on")),
-            ReleasesStatement("start_ventilation", "ventilation_on", 0, 2),
-            TriggersStatement("activate_alarm", "start_ventilation", 1),
-            StateTriggerStatement(AtomicFormula("smoke"), "activate_alarm"),
-            ImpossibleIfStatement("activate_alarm", AtomicFormula("maintenance")),
-        ]
-        obs = Conjunction(Conjunction(Conjunction(AtomicFormula("smoke"), Negation(AtomicFormula("maintenance"))),
-                                     Negation(AtomicFormula("alarm_on"))), Negation(AtomicFormula("ventilation_on")))
-        self.observations = [Observation(obs, 0)]
-        self.acs = []
-        self.queries = [
-            ("possibly Sc", QueryPossiblyScenario()),
-            ("necessary performing activate_alarm at 0", QueryPerforming("necessary", "activate_alarm", 0)),
-            ("necessary alarm_on at 1", QueryCondition("necessary", AtomicFormula("alarm_on"), 1)),
-            ("necessary performing start_ventilation at 2", QueryPerforming("necessary", "start_ventilation", 2)),
-            ("necessary ventilation_on at 4", QueryCondition("necessary", AtomicFormula("ventilation_on"), 4)),
-        ]
-
-    def _load_bledny(self):
-        self.fluents = ["broken", "system_on"]
-        self.actions = ["repair", "reboot"]
-        self.domain_items = [
-            DurationStatement("repair", 3),
-            DurationStatement("reboot", 2),
-            CausesStatement("reboot", AtomicFormula("system_on"), 2, Negation(AtomicFormula("broken"))),
-            ImpossibleAtStatement("reboot", 0),
-        ]
-        self.observations = [
-            Observation(AtomicFormula("broken"), 0),
-            Observation(Negation(AtomicFormula("broken")), 0),
-        ]
-        self.acs = [
-            ActionDeclaration("repair", 0),
-            ActionDeclaration("reboot", 1),
-            ActionDeclaration("reboot", 0),
-        ]
-        self.queries = []
-
-    def _load_smoke_wraca(self):
-        self.fluents = ["smoke", "alarm_on"]
-        self.actions = ["activate_alarm"]
-        self.domain_items = [
-            DurationStatement("activate_alarm", 1),
-            CausesStatement("activate_alarm", AtomicFormula("alarm_on"), 1, AtomicFormula("smoke")),
-            StateTriggerStatement(AtomicFormula("smoke"), "activate_alarm"),
-        ]
-        self.observations = [
-            Observation(Conjunction(AtomicFormula("smoke"), Negation(AtomicFormula("alarm_on"))), 0),
-            Observation(Negation(AtomicFormula("smoke")), 2),
-            Observation(AtomicFormula("smoke"), 4),
-        ]
-        self.acs = []
-        self.queries = [
-            ("possibly Sc", QueryPossiblyScenario()),
-            ("necessary performing activate_alarm at 0", QueryPerforming("necessary", "activate_alarm", 0)),
-            ("possibly performing activate_alarm at 2", QueryPerforming("possibly", "activate_alarm", 2)),
-            ("necessary performing activate_alarm at 4", QueryPerforming("necessary", "activate_alarm", 4)),
-            ("necessary alarm_on at 1", QueryCondition("necessary", AtomicFormula("alarm_on"), 1)),
-            ("necessary alarm_on at 5", QueryCondition("necessary", AtomicFormula("alarm_on"), 5)),
-        ]
-
-    def _load_z5(self):
-        self.fluents = ["broken", "system_on"]
-        self.actions = ["reboot", "repair"]
-        self.domain_items = [
-            DurationStatement("reboot", 2),
-            DurationStatement("repair", 3),
-            CausesStatement("reboot", AtomicFormula("system_on"), 2, Negation(AtomicFormula("broken"))),
-            CausesStatement("repair", Negation(AtomicFormula("broken")), 3, None),
-        ]
-        self.observations = [Observation(AtomicFormula("broken"), 0)]
-        self.acs = [ActionDeclaration("reboot", 0)]
-        self.queries = [
-            ("possibly Sc", QueryPossiblyScenario()),
-            ("possibly performing reboot at 0", QueryPerforming("possibly", "reboot", 0)),
-            ("possibly system_on at 2", QueryCondition("possibly", AtomicFormula("system_on"), 2)),
-        ]
+        # Tytul okna pokazuje aktualnie zaladowany plik
+        self.root.title(f"DS1 — {os.path.basename(path)}")
 
     # ═══════════════════════════════════════════════════════════
     # SOLVE
@@ -1309,10 +1284,33 @@ class DS1App:
 # ENTRY POINT
 # ═══════════════════════════════════════════════════════════════
 
+def _pick_mono_font(root):
+    """Wybiera pierwszy dostepny font monospace z listy preferencji.
+
+    Dzieki temu tabele w wynikach zawsze beda mialy wyrownane kolumny
+    niezaleznie od systemu (Cascadia nie wszedzie istnieje, Menlo jest
+    domyslny na macOS, Consolas na Windows).
+    """
+    available = set(tkfont.families(root))
+    candidates = (
+        'Cascadia Code', 'JetBrains Mono', 'Fira Code',
+        'Menlo', 'SF Mono', 'Monaco',
+        'Consolas', 'Courier New', 'Courier',
+    )
+    for f in candidates:
+        if f in available:
+            return f
+    return 'Courier'
+
+
 def main():
     root = tk.Tk()
     current_scaling = float(root.tk.call('tk', 'scaling'))
     root.tk.call('tk', 'scaling', current_scaling * Theme.FONT_SCALE)
+
+    # Wybierz prawdziwy monospace dostepny w systemie. Nadpisuje atrybut
+    # klasowy Theme.FONT_MONO ZANIM widgety beda tworzone.
+    Theme.FONT_MONO = _pick_mono_font(root)
 
     default_font = tkfont.nametofont('TkDefaultFont')
     default_font.configure(family=Theme.FONT_FAMILY, size=13)

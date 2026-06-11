@@ -1,0 +1,28 @@
+# Test 06: smoke pulsuje (wielokrotne rising edge)
+#
+# Co pokazuje:
+#   Rozszerzenie idei z przykladu 4 (smoke_wraca): smoke wlacza sie
+#   i gasnie kilkukrotnie. Edge-triggered state trigger odpala alarm
+#   na KAZDYM zboczu narastajacym (t=0, 4, 8), pomija gdy smoke trwa
+#   lub jest False.
+
+DOMAIN:
+activate_alarm duration 1
+activate_alarm causes alarm_on after 1 if smoke
+smoke causes activate_alarm
+
+SCENARIO:
+OBS:
+(smoke & ~alarm_on, 0)
+(~smoke, 2)
+(smoke, 4)
+(~smoke, 6)
+(smoke, 8)
+
+QUERIES:
+possibly Sc
+necessary performing activate_alarm at 0 when Sc
+possibly performing activate_alarm at 2 when Sc
+necessary performing activate_alarm at 4 when Sc
+possibly performing activate_alarm at 6 when Sc
+necessary performing activate_alarm at 8 when Sc

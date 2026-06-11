@@ -1,0 +1,26 @@
+# Test 02: impossible_if blokuje akcje gdy warunek prawdziwy
+#
+# Co pokazuje:
+#   Regula 'impossible launch if storm' blokuje start akcji launch
+#   gdy storm=True w jej start_time. Scenariusz: storm=True na starcie,
+#   user proboje launch w t=0 → 0 modeli (nierealizowalny).
+#
+#   Roznica wzgledem przykladu 5 (precondition_z5): tam blokade powoduje
+#   warunek poczatkowy wynikajacy z 'causes ... if pi' (Z5), tu czysty
+#   'impossible if'.
+
+DOMAIN:
+launch duration 1
+launch causes rocket_up after 1
+impossible launch if storm
+
+SCENARIO:
+OBS:
+(storm, 0)
+ACS:
+(launch, 0)
+
+QUERIES:
+possibly Sc
+possibly performing launch at 0 when Sc
+possibly rocket_up at 1 when Sc

@@ -1,0 +1,31 @@
+# Przyklad 2: Serwerownia
+#
+# Co pokazuje:
+#   Pelny zestaw mechanizmow DS1 — wyzwalacz stanowy (smoke causes
+#   activate_alarm) odpala akcje automatycznie, dynamic trigger
+#   (activate_alarm triggers start_ventilation) odpala kolejna akcje po
+#   zakonczeniu poprzedniej, warunkowe efekty (causes...if). Smoke trwa
+#   caly scenariusz, ale dzieki edge-triggered semantyce activate_alarm
+#   odpala sie tylko raz — w t=0 — a nie cyklicznie.
+
+DOMAIN:
+activate_alarm duration 1
+start_ventilation duration 2
+activate_alarm causes alarm_on after 1 if smoke
+start_ventilation causes ventilation_on after 2 if alarm_on
+start_ventilation releases ventilation_on during [0,2]
+activate_alarm triggers start_ventilation after 1
+smoke causes activate_alarm
+impossible activate_alarm if maintenance
+
+SCENARIO:
+OBS:
+(smoke & ~maintenance & ~alarm_on & ~ventilation_on, 0)
+ACS:
+
+QUERIES:
+possibly Sc
+necessary performing activate_alarm at 0 when Sc
+necessary alarm_on at 1 when Sc
+necessary performing start_ventilation at 2 when Sc
+necessary ventilation_on at 4 when Sc

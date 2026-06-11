@@ -1,0 +1,26 @@
+# Przyklad 1: Projektor
+#
+# Co pokazuje:
+#   Niedeterminizm wynikajacy z 'releases' (okluzja fluentu w przedziale
+#   trwania akcji). Po wcisnieciu press_power projektor MOZE, ale nie musi
+#   sie wlaczyc — solver generuje 2 modele. Demonstruje tez 'impossible if'
+#   (nie mozna wcisnac jesli juz wlaczony) oraz roznice 'necessary' vs
+#   'possibly' w kwerendach.
+
+DOMAIN:
+press_power duration 1
+press_power releases projector_on during [0,1]
+impossible press_power if projector_on
+
+SCENARIO:
+OBS:
+(~projector_on, 0)
+ACS:
+(press_power, 0)
+
+QUERIES:
+possibly Sc
+necessary performing press_power at 0 when Sc
+necessary performing press_power at 1 when Sc
+necessary projector_on at 2 when Sc
+possibly projector_on at 2 when Sc

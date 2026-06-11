@@ -1,0 +1,23 @@
+# Test 07: OBS w odleglej przyszlosci
+#
+# Co pokazuje:
+#   Obserwacja umieszczona w t=10 zmusza solver do wygenerowania historii
+#   az do t=10. Test horyzontu W1 — extra_times z kwerend ORAZ czas
+#   obserwacji wlaczane sa do podstawowego max_t. Bez tego solver
+#   zatrzymalby sie zaraz po koncu akcji (t=1).
+
+DOMAIN:
+press_power duration 1
+press_power causes light_on after 1
+
+SCENARIO:
+OBS:
+(~light_on, 0)
+(light_on, 10)
+ACS:
+(press_power, 0)
+
+QUERIES:
+possibly Sc
+necessary light_on at 5 when Sc
+necessary light_on at 10 when Sc

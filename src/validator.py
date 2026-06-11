@@ -112,15 +112,17 @@ def _check_durations(domain) -> list:
 
 def _check_causes_delays(domain) -> list:
     """
-    Z5: Efekty akcji muszą wystąpić po czasie d >= 1.
+    Opoznienie efektu musi byc d >= 0. Wartosc 0 oznacza efekt
+    natychmiastowy w chwili startu akcji (np. 'load causes loaded after 0').
+    Wartosci ujemne nie maja sensu — efekt nie moze zachodzic przed akcja.
     """
     errors = []
     for c in domain.causes:
-        if c.delay < 1:
+        if c.delay < 0:
             errors.append(ValidationError(
                 "DELAY_INVALID",
-                f"Z5 — akcja '{c.action}' ma causes z delay={c.delay}, "
-                f"wymagane d >= 1"
+                f"Akcja '{c.action}' ma causes z delay={c.delay}, "
+                f"wymagane d >= 0"
             ))
     return errors
 

@@ -1,0 +1,61 @@
+# Przyklad 4.12 z wykladu RW_04 — Yale Shooting Problem (klasyk KR)
+#
+# Z wykladu (AL):
+#   LOAD causes loaded;
+#   LOAD invokes ESCAPE;                       (d=0 implicit -> after 0)
+#   ESCAPE releases hidden;
+#   SHOOT causes ~loaded;
+#   SHOOT causes ~alive if loaded & ~hidden.
+#   OBS = {(alive & ~loaded & ~hidden, 0)}
+#   ACS = {(LOAD, 1), (SHOOT, 3)}
+#
+# Slad czasowy:
+#   t=0: stan poczatkowy (Fred zywy, gun pusty, Fred nie schowany)
+#   t=1: LOAD
+#   t=2: LOAD konczy → loaded=True. LOAD invokes ESCAPE → ESCAPE w t=2.
+#   t=3: ESCAPE konczy → hidden w okluzji (moze byc True lub False!).
+#        SHOOT startuje (z ACS).
+#   t=4: SHOOT konczy → ~loaded=True. Efekt ~alive jesli loaded & ~hidden:
+#        - jesli hidden=True w t=3: Fred schowany, kula chybia, alive=True
+#        - jesli hidden=False w t=3: kula trafia, alive=False
+#
+# Wynik: 2 modele zgodnie z wykladem
+#   Model 1: hidden=True w t=3 → Fred schowany, kula chybia, alive=True w t=4
+#   Model 2: hidden=False w t=3 → Fred nieschowany, kula trafia, alive=False
+#
+# UWAGA SEMANTYCZNA — poluzowane Z5:
+#   shoot ma DWIE reguly: 'causes ~loaded after 1' (bezwarunkowa) ORAZ
+#   'causes ~alive after 1 if loaded & ~hidden' (warunkowa). Dzieki regule
+#   bezwarunkowej shoot zawsze moze wystartowac (zawsze rozladowuje gun),
+#   a kill jest opcjonalnym efektem zaleznym od warunku.
+#
+#   Dla porownania: precondition_z5 ma TYLKO warunkowa regule
+#   'reboot causes system_on after 2 if ~broken' — wiec gdy ~broken nie
+#   zachodzi, reboot nadal jest blokowany (Z5 dziala dla single-rule
+#   actions).
+
+DOMAIN:
+load duration 1
+escape duration 1
+shoot duration 1
+load causes loaded after 1
+load triggers escape after 0
+escape releases hidden during [1,1]
+shoot causes ~loaded after 1
+shoot causes ~alive after 1 if loaded & ~hidden
+
+SCENARIO:
+OBS:
+(alive & ~loaded & ~hidden, 0)
+ACS:
+(load, 1)
+(shoot, 3)
+
+QUERIES:
+possibly Sc
+necessary performing escape at 2 when Sc
+necessary loaded at 2 when Sc
+necessary ~loaded at 4 when Sc
+necessary ~loaded at 5 when Sc
+possibly alive at 4 when Sc
+possibly ~alive at 4 when Sc

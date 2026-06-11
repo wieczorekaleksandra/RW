@@ -1,0 +1,26 @@
+# Przyklad 3: Bledny scenariusz (test walidacji)
+#
+# Co pokazuje:
+#   Dzialanie walidatora scenariuszy. Scenariusz zawiera celowo wiele
+#   naruszen zalozen DS1:
+#     - sprzeczne obserwacje (broken i ~broken w tej samej chwili t=0),
+#     - nakladajace sie akcje w ACS (narusza Z2 sekwencyjnosci),
+#     - akcja zadeklarowana w punkcie 'impossible at' (narusza Z8).
+#   Walidator powinien odrzucic scenariusz przed rozwiazywaniem.
+
+DOMAIN:
+repair duration 3
+reboot duration 2
+reboot causes system_on after 2 if ~broken
+impossible reboot at 0
+
+SCENARIO:
+OBS:
+(broken, 0)
+(~broken, 0)
+ACS:
+(repair, 0)
+(reboot, 1)
+(reboot, 0)
+
+QUERIES:

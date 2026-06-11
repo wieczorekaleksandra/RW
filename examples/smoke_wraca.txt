@@ -1,0 +1,32 @@
+# Przyklad 4: Smoke wraca (edge-triggered)
+#
+# Co pokazuje:
+#   Korzysci z edge-triggered semantyki wyzwalaczy stanowych.
+#   Scenariusz: smoke pojawia sie w t=0 (alarm strzela), gasnie w t=2
+#   (alarm milczy), wraca w t=4 (alarm strzela PONOWNIE).
+#
+#   Demonstruje ze wyzwalacz 'smoke causes activate_alarm':
+#     - strzela na pierwsze pojawienie sie smoke (t=0),
+#     - NIE strzela cyklicznie gdy smoke trwa (t=1),
+#     - milczy gdy smoke=False (t=2, 3),
+#     - poprawnie reaguje na NOWE zbocze narastajace (t=4).
+
+DOMAIN:
+activate_alarm duration 1
+activate_alarm causes alarm_on after 1 if smoke
+smoke causes activate_alarm
+
+SCENARIO:
+OBS:
+(smoke & ~alarm_on, 0)
+(~smoke, 2)
+(smoke, 4)
+ACS:
+
+QUERIES:
+possibly Sc
+necessary performing activate_alarm at 0 when Sc
+possibly performing activate_alarm at 2 when Sc
+necessary performing activate_alarm at 4 when Sc
+necessary alarm_on at 1 when Sc
+necessary alarm_on at 5 when Sc

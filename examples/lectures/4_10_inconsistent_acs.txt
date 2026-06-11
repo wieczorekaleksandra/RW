@@ -1,0 +1,22 @@
+# Przyklad 4.10 z wykladu RW_04 — niespojny ACS
+#
+# Z wykladu (AL):
+#   Obs = puste
+#   Acs = {(A, 1), (B, 1)}
+#   Sc jest niespojny wzgledem dowolnej domeny D — dwie akcje
+#   nie moga zaczynac sie w tej samej chwili.
+#
+# W DS1: walidator (Z2) odrzuca scenariusz przed solverem.
+
+DOMAIN:
+a duration 1
+b duration 1
+
+SCENARIO:
+OBS:
+ACS:
+(a, 1)
+(b, 1)
+
+QUERIES:
+possibly Sc

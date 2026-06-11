@@ -1,0 +1,24 @@
+# Test 04: state trigger zablokowany przez impossible_if
+#
+# Co pokazuje:
+#   Wyzwalacz stanowy 'smoke causes alarm' chcialby odpalic alarm,
+#   ale 'impossible alarm if maintenance' blokuje to gdy serwerownia
+#   jest w trybie konserwacji. Scenariusz: smoke=True i maintenance=True
+#   na starcie → alarm NIE odpala sie (mimo ze warunek triggera spelniony).
+#   Scenariusz jest realizowalny (1 model), tylko bez akcji.
+
+DOMAIN:
+alarm duration 1
+alarm causes alarm_on after 1
+smoke causes alarm
+impossible alarm if maintenance
+
+SCENARIO:
+OBS:
+(smoke & maintenance & ~alarm_on, 0)
+ACS:
+
+QUERIES:
+possibly Sc
+possibly performing alarm at 0 when Sc
+necessary ~alarm_on at 1 when Sc

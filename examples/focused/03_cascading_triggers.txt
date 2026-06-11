@@ -1,0 +1,40 @@
+# Test 03: Cascading triggers (A → B → C)
+#
+# Co pokazuje:
+#   Lancuch dynamic triggerow: zakonczenie akcji A automatycznie odpala B,
+#   zakonczenie B automatycznie odpala C. Pokazuje ze solver poprawnie
+#   propaguje horyzont przez wieloelementowy lancuch wyzwolen, oraz ze
+#   efekty kazdej akcji zachodza we wlasciwych chwilach.
+#
+# Ramy czasowe oczekiwane:
+#   t=0     start_a startuje (z ACS)
+#   t=1     start_a konczy -> a_done=True, trigger odpala start_b w t=2
+#   t=2..3  start_b trwa
+#   t=3     start_b konczy -> b_done=True, trigger odpala start_c w t=4
+#   t=4..5  start_c trwa
+#   t=5     start_c konczy -> c_done=True
+
+DOMAIN:
+start_a duration 1
+start_b duration 1
+start_c duration 1
+start_a causes a_done after 1
+start_b causes b_done after 1
+start_c causes c_done after 1
+start_a triggers start_b after 1
+start_b triggers start_c after 1
+
+SCENARIO:
+OBS:
+(~a_done & ~b_done & ~c_done, 0)
+ACS:
+(start_a, 0)
+
+QUERIES:
+possibly Sc
+necessary performing start_a at 0 when Sc
+necessary performing start_b at 2 when Sc
+necessary performing start_c at 4 when Sc
+necessary a_done at 1 when Sc
+necessary b_done at 3 when Sc
+necessary c_done at 5 when Sc

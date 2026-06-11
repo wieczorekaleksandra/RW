@@ -1,4 +1,4 @@
-"""Wspolne funkcje pomocnicze dla przykladow."""
+"""Funkcje formatowania i wydruku — wspolne dla CLI i GUI."""
 
 from src.models import (
     QueryPerforming, QueryCondition,

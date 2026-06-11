@@ -1,0 +1,21 @@
+# Test 08: Alternatywa (operator |) w warunku state triggera
+#
+# Co pokazuje:
+#   Operator '|' (OR) w warunku wyzwalacza stanowego. Trigger
+#   'danger | low_health causes flee' odpala flee gdy zachodzi
+#   ktorykolwiek z warunkow — tu low_health=True wystarcza, mimo ze
+#   danger=False. Test parsera i ewaluatora operatorow logicznych poza
+#   koniunkcja.
+
+DOMAIN:
+flee duration 1
+danger | low_health causes flee
+
+SCENARIO:
+OBS:
+(~danger & low_health, 0)
+ACS:
+
+QUERIES:
+possibly Sc
+necessary performing flee at 0 when Sc

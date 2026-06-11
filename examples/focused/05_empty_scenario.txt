@@ -1,0 +1,18 @@
+# Test 05: Pusty scenariusz
+#
+# Co pokazuje:
+#   Scenariusz bez zadnych obserwacji ani deklaracji akcji jest poprawny —
+#   solver zwraca trywialny model w ktorym wszystkie fluenty maja domyslna
+#   wartosc False przez caly horyzont. Brak akcji w wykonaniu.
+
+DOMAIN:
+press_power duration 1
+press_power causes projector_on after 1
+
+SCENARIO:
+OBS:
+ACS:
+
+QUERIES:
+possibly Sc
+necessary ~projector_on at 0 when Sc

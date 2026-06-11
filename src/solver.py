@@ -394,29 +394,47 @@ def _check_impossible(domain, executions, history, t) -> bool:
 
 def _check_action_preconditions(domain, executions, history, t) -> bool:
     """
-    Z5: Sprawdza warunki poczatkowe akcji startujacych w chwili t.
+    Z5 (poluzowane): Sprawdza warunki wykonalnosci akcji startujacych w t.
 
-    Kazda regula 'a causes alpha after delta if pi' implikuje, ze pi
-    jest warunkiem poczatkowym (precondition) akcji a — akcja moze sie
-    rozpoczac tylko gdy pi zachodzi w jej start_time. Stosujemy semantyke
-    KONIUNKCJI: dla akcji a z kilkoma regulami causes, WSZYSTKIE pi musza
-    byc spelnione (reguly bez warunku nie naladaja nic).
+    Akcja `a` moze wystartowac w `t` jesli:
+      (a) ma jakakolwiek regule `causes` bez warunku — wtedy ma efekt
+          gwarantowany niezaleznie od stanu, lub
+      (b) wszystkie jej reguly causes sa warunkowe ORAZ przynajmniej
+          jeden warunek π jest spelniony w `t`.
 
-    Brak danych historycznych dla fluentu w pi traktujemy jako "warunek
-    nie spelniony" — wymagamy zeby precondition byl udowodniony True.
+    Intuicja: akcja ma sens jesli moze zrobic cos w danym stanie —
+    albo gwarantowanego, albo przynajmniej jednego z warunkowych efektow.
+    Jesli wszystkie efekty sa warunkowe i zaden warunek nie jest
+    spelniony, akcja jest nierealizowalna.
 
-    Zwraca False jesli jakakolwiek precondition nie zachodzi -> model
-    niepoprawny.
+    Akcje bez zadnych regul causes nie maja preconditiona (mozna je
+    odpalic dowolnie — moga miec sens np. przez releases lub triggers).
+
+    Brak danych historycznych dla fluentu traktujemy jako "warunek nie
+    spelniony" — wymagamy zeby zostal udowodniony True.
+
+    Zwraca False jesli akcja nie ma sensu w stanie t → model niepoprawny.
     """
     for ex in executions:
         if ex.start_time == t:
-            for c in domain.causes:
-                if c.action == ex.action and c.condition is not None:
-                    try:
-                        if not evaluate(c.condition, history, t):
-                            return False
-                    except KeyError:
-                        return False
+            rules = [c for c in domain.causes if c.action == ex.action]
+            if not rules:
+                continue
+            # (a) Jakakolwiek regula bezwarunkowa → akcja zawsze ma sens.
+            if any(c.condition is None for c in rules):
+                continue
+            # (b) Wszystkie reguly warunkowe — przynajmniej jeden warunek
+            # musi byc spelniony, inaczej akcja nie ma w t zadnego efektu.
+            any_applies = False
+            for c in rules:
+                try:
+                    if evaluate(c.condition, history, t):
+                        any_applies = True
+                        break
+                except KeyError:
+                    pass
+            if not any_applies:
+                return False
     return True
 
 

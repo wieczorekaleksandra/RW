@@ -1,0 +1,28 @@
+# Test 01: Adjacent actions (semantyka [start, end))
+#
+# Co pokazuje:
+#   Akcje moga byc deklarowane jedna po drugiej bez przerwy:
+#   a konczy w t=1 (interwal [0,1), wykonywana tylko w t=0),
+#   b moze startowac juz w t=1 — sekwencyjnosc Z2 jest zachowana.
+#
+#   Po cichu pokazuje rowniez: efekt 'a causes a_ran after 1' fire'uje
+#   sie dokladnie w t=1 (start_time + delay).
+
+DOMAIN:
+a duration 1
+b duration 1
+a causes a_ran after 1
+b causes b_ran after 1
+
+SCENARIO:
+OBS:
+ACS:
+(a, 0)
+(b, 1)
+
+QUERIES:
+possibly Sc
+necessary performing a at 0 when Sc
+necessary performing b at 1 when Sc
+necessary a_ran at 1 when Sc
+necessary b_ran at 2 when Sc

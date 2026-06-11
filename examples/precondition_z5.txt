@@ -1,0 +1,30 @@
+# Przyklad 5: Z5 — precondition blokuje start akcji
+#
+# Co pokazuje:
+#   Zalozenie Z5: 'a causes alpha after delta if pi' implikuje, ze pi
+#   jest warunkiem poczatkowym akcji a — akcja moze sie rozpoczac TYLKO
+#   gdy pi zachodzi w start_time.
+#
+#   Dziedzina: reboot wymaga zeby system NIE byl broken (precondition ~broken)
+#   Scenariusz: system zepsuty (broken=True w t=0), user proboje od razu
+#   zrobic reboot w t=0 -> precondition naruszona -> 0 modeli.
+#
+#   Walidator nie odrzuca tego scenariusza (brak naruszen sekwencyjnosci ani
+#   impossible_at). To solver wykrywa nierealizowalnosc dzieki Z5.
+
+DOMAIN:
+reboot duration 2
+repair duration 3
+reboot causes system_on after 2 if ~broken
+repair causes ~broken after 3
+
+SCENARIO:
+OBS:
+(broken, 0)
+ACS:
+(reboot, 0)
+
+QUERIES:
+possibly Sc
+possibly performing reboot at 0 when Sc
+possibly system_on at 2 when Sc

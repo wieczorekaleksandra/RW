@@ -20,8 +20,6 @@ from src.models import (
     QueryPossiblyScenario, QueryPerforming, QueryCondition,
 )
 from src.solver import solve
-from src.validator import validate
-from src.query_engine import execute_query
 from src.printers import (
     format_formula, format_model_table,
     print_domain, print_scenario, print_validation, print_queries,
@@ -594,10 +592,9 @@ class DS1App:
         self._build_tab_scenario()
         self._build_tab_queries()
 
-        # Right: Results
-        right = tk.Frame(main, bg=Theme.BG, width=420)
-        right.pack(side='right', fill='both', padx=(8, 0))
-        right.pack_propagate(False)
+        # Right: Results — rozszerza sie razem z oknem (jak lewa strona)
+        right = tk.Frame(main, bg=Theme.BG)
+        right.pack(side='right', fill='both', expand=True, padx=(8, 0))
 
         self._build_results_panel(right)
 
